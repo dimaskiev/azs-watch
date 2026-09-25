@@ -43,7 +43,11 @@ def runtime_dir() -> Path:
 
 
 CACHE = runtime_dir() / "cache.json"
-OVERRIDES = runtime_dir() / "discounts.local.json"
+OVERRIDES = (
+    DATA / "discounts.local.json"
+    if os.environ.get("VERCEL")
+    else runtime_dir() / "discounts.local.json"
+)
 FUEL_KEYS = ("a95plus", "a95", "a92", "diesel", "dieselplus", "lpg")
 
 MINFIN_TM = "https://index.minfin.com.ua/ua/markets/fuel/tm/"
@@ -946,6 +950,9 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(public_state(do_refresh=True))
             return
         if path == "/api/discounts":
+            if is_hosted():
+                self._json({"ok": False, "error": "Редактор знижок лише локально"}, 404)
+                return
             self._json(discounts_editor())
             return
         if path in {"/", "/index.html"}:
@@ -961,6 +968,10 @@ class Handler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             self._json({"ok": False, "error": "Некоректний JSON"}, 400)
             return
+        if path in {"/api/discounts", "/api/discounts/reset"}:
+            if is_hosted():
+                self._json({"ok": False, "error": "Редактор знижок лише локально"}, 404)
+                return
         if path == "/api/discounts":
             save_overrides(body.get("overrides") or {})
             self._json({"ok": True, "editor": discounts_editor(), "state": public_state(rebuild=True)})

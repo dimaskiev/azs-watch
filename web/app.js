@@ -1,5 +1,4 @@
 const KEY = "azs-watch-settings";
-const DISCOUNT_KEY = "azs-watch-discounts";
 const LABELS = {
   a95: "Бензин звичайний · А-95",
   a95plus: "Бензин фірмовий · А-95+",
@@ -56,42 +55,19 @@ function saveSettings() {
 }
 
 function hosted() {
+  const host = (location.hostname || "").toLowerCase();
+  if (host.endsWith(".vercel.app") || host.endsWith(".vercel.dev")) return true;
   return !!(state.data && state.data.hosted);
 }
 
-function loadLocalOverrides() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DISCOUNT_KEY) || "{}");
-    return raw && typeof raw === "object" ? raw : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveLocalOverrides(overrides) {
-  localStorage.setItem(DISCOUNT_KEY, JSON.stringify(overrides || {}));
-}
-
-function applyOverridesToState(data, overrides) {
-  if (!data || !overrides) return data;
-  let dirty = false;
-  (data.partners || []).forEach((partner) => {
-    const over = overrides[partner.id];
-    if (!over || typeof over !== "object") return;
-    dirty = true;
-    Object.values(partner.regions || {}).forEach((pack) => {
-      pack.discount = { ...(pack.discount || {}), ...over };
-      pack.real = pack.real || {};
-      Object.keys(pack.retail || {}).forEach((key) => {
-        const retail = pack.retail[key];
-        let cut = pack.discount[key];
-        if (cut == null && key === "dieselplus") cut = pack.discount.diesel;
-        pack.real[key] = retail == null || cut == null ? null : round2(Math.max(0, retail - Number(cut)));
-      });
-    });
-  });
-  if (dirty) data.customized = true;
-  return data;
+function applyHostedChrome() {
+  if (!hosted()) return;
+  document.body.classList.add("hosted");
+  const tabs = document.querySelector(".tabs");
+  if (tabs) tabs.classList.add("hidden");
+  if ($("view-discounts")) $("view-discounts").classList.add("hidden");
+  if ($("view-calc")) $("view-calc").classList.remove("hidden");
+  state.tab = "calc";
 }
 
 function money(n) {
@@ -320,14 +296,20 @@ function renderMeta() {
   const live = d.live && !d.from_cache;
   $("link-pill").textContent = live ? "LINK LIVE" : d.from_cache ? "LINK CACHE" : "LINK DOWN";
   $("link-pill").className = "pill" + (live ? "" : " hot");
-  $("src-pill").textContent = d.customized
-    ? "ЗНИЖКИ РУЧНІ"
-    : (d.alt_notes && d.alt_notes.length)
+  $("src-pill").textContent = hosted()
+    ? (d.alt_notes && d.alt_notes.length)
       ? "SRC МІНФІН+МЕРЕЖІ"
       : d.source_date
         ? `SRC ${d.source_date}`
-        : "SRC —";
-  $("src-pill").className = "pill" + (d.customized ? "" : " dim");
+        : "SRC —"
+    : d.customized
+      ? "ЗНИЖКИ РУЧНІ"
+      : (d.alt_notes && d.alt_notes.length)
+        ? "SRC МІНФІН+МЕРЕЖІ"
+        : d.source_date
+          ? `SRC ${d.source_date}`
+          : "SRC —";
+  $("src-pill").className = "pill" + (!hosted() && d.customized ? "" : " dim");
   $("stamp").textContent = [
     d.caption || "ціни мереж АЗК",
     d.error ? `помилка: ${d.error}` : "",
@@ -395,6 +377,7 @@ function applyControls() {
 }
 
 function showTab(tab) {
+  if (hosted()) tab = "calc";
   state.tab = tab;
   document.querySelectorAll(".tab").forEach((btn) => {
     btn.classList.toggle("on", btn.dataset.tab === tab);
@@ -402,6 +385,7 @@ function showTab(tab) {
   $("view-calc").classList.toggle("hidden", tab !== "calc");
   $("view-discounts").classList.toggle("hidden", tab !== "discounts");
   if (tab === "discounts") loadEditor();
+  applyHostedChrome();
 }
 
 function renderEditor() {
@@ -447,21 +431,10 @@ function collectOverrides() {
 }
 
 async function loadEditor() {
+  if (hosted()) return;
   const res = await fetch("/api/discounts", { cache: "no-store" });
   if (!res.ok) throw new Error("HTTP " + res.status);
   state.editor = await res.json();
-  if (hosted()) {
-    const local = loadLocalOverrides();
-    const ids = Object.keys(local);
-    if (ids.length) {
-      (state.editor.rows || []).forEach((row) => {
-        if (!local[row.id]) return;
-        row.current = { ...row.current, ...local[row.id] };
-        row.overridden = true;
-      });
-      state.editor.customized = true;
-    }
-  }
   renderEditor();
 }
 
@@ -470,15 +443,6 @@ async function saveEditor() {
   $("edit-status").textContent = "зберігаю…";
   try {
     const overrides = collectOverrides();
-    if (hosted()) {
-      saveLocalOverrides(overrides);
-      applyOverridesToState(state.data, overrides);
-      await loadEditor();
-      fillRegions();
-      paint();
-      $("edit-status").textContent = "збережено в цьому браузері";
-      return;
-    }
     const res = await fetch("/api/discounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -503,13 +467,6 @@ async function saveEditor() {
 async function resetEditor() {
   $("reset-discounts").disabled = true;
   try {
-    if (hosted()) {
-      localStorage.removeItem(DISCOUNT_KEY);
-      await load("/api/state");
-      await loadEditor();
-      $("edit-status").textContent = "повернуто каталог публічних анонсів";
-      return;
-    }
     const res = await fetch("/api/discounts/reset", { method: "POST" });
     const payload = await res.json();
     state.editor = payload.editor;
@@ -538,7 +495,7 @@ async function load(path) {
   const res = await fetch(path, { cache: "no-store" });
   if (!res.ok) throw new Error("HTTP " + res.status);
   state.data = await res.json();
-  if (hosted()) applyOverridesToState(state.data, loadLocalOverrides());
+  applyHostedChrome();
   fillRegions();
   paint();
 }
@@ -599,6 +556,7 @@ function bind() {
 }
 
 bind();
+applyHostedChrome();
 applyControls();
 load("/api/state").catch((err) => {
   $("stamp").textContent = "канал недоступний: " + err.message;

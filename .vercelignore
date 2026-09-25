@@ -1,5 +1,4 @@
 data/cache.json
-data/discounts.local.json
 *.bat
 __pycache__
 *.pyc
