@@ -200,15 +200,17 @@ def classify_official_fuel(kind: str, brand: str = "") -> str | None:
         return None
     dieselish = "дп" in blob or "дизель" in blob or "diesel" in blob
     if dieselish:
-        if any(x in blob for x in ("mustang", "pulls", "ventus", "evox", "perfekt", "преміум", "премиум", "+", "фірм")):
+        if any(x in blob for x in ("mustang", "pulls", "ventus", "evox", "perfekt", "upgdiesel", "upg diesel", "energy", "extro", "преміум", "премиум", "+", "фірм")):
             return "dieselplus"
         return "diesel"
     if "92" in blob:
         return "a92"
     if "95" in blob:
-        if any(x in blob for x in ("mustang", "pulls", "ventus", "evox", "perfekt", "преміум", "премиум", "+")):
+        if any(x in blob for x in ("mustang", "pulls", "ventus", "evox", "perfekt", "upg95", "upg 95", "energy", "extro", "преміум", "премиум", "+")):
             return "a95plus"
         return "a95"
+    if "energy" in blob:
+        return "a95plus"
     return None
 
 
@@ -722,12 +724,12 @@ def classify_fuel_name(name: str) -> str | None:
     if "газ" in n:
         return "lpg"
     if "дизель" in n or n.startswith("дп") or " дп" in n:
-        if any(token in n for token in ("преміум", "премиум", "pulls", "mustang", "evox", "ventus", "perfekt", "фірм", "plus", "дп+", "must")):
+        if any(token in n for token in ("преміум", "премиум", "pulls", "mustang", "evox", "ventus", "perfekt", "upgdiesel", "energy", "extro", "фірм", "plus", "дп+", "must")):
             return "dieselplus"
         return "diesel"
     if "92" in n:
         return "a92"
-    if "95" in n and any(token in n for token in ("+", "преміум", "премиум", "pulls", "mustang", "evox", "ventus", "perfekt")):
+    if "95" in n and any(token in n for token in ("+", "преміум", "премиум", "pulls", "mustang", "evox", "ventus", "perfekt", "upg95", "energy", "extro")):
         return "a95plus"
     if "95" in n:
         return "a95"
@@ -931,21 +933,10 @@ def cache_age_sec(payload: dict[str, Any] | None) -> float | None:
 
 
 def current_state() -> dict[str, Any]:
-    with _lock:
-        if _state:
-            age = cache_age_sec(_state)
-            if age is not None and age < REFRESH_SEC:
-                return attach_schedule(dict(_state))
     cache = load_json(CACHE, {})
     age = cache_age_sec(cache)
     if cache.get("national") and age is not None and age < REFRESH_SEC:
-        partners_doc = merge_partners(load_json(PARTNERS, {"partners": []}))
-        state = build_state(None, partners_doc)
-        attach_schedule(state)
-        with _lock:
-            _state.clear()
-            _state.update(state)
-        return attach_schedule(dict(state))
+        return rebuild_prices()
     return refresh()
 
 

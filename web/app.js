@@ -102,11 +102,11 @@ function tierHint() {
     if (state.settings.tier === "premium") {
       return dieselPlusCopied()
         ? "ДП+ · окремої актуальної ціни немає, рахуємо як ДП Євро"
-        : "фірмовий ДП · Pulls / Mustang / EVOX · якщо немає в Мінфіні — з сайту мережі";
+        : "фірмовий ДП · Mustang+ / Pulls Diesel / upgDIESEL / Ventus Diesel / ДП Energy / ДП EVOX / ДП Perfekt";
     }
     return "звичайний ДП Євро";
   }
-  if (state.settings.tier === "premium") return "А-95+ фірмовий · Pulls / Mustang / EVOX. Окремого А-98 у прайсі немає.";
+  if (state.settings.tier === "premium") return "фірмовий бензин · Mustang / Pulls 95 / upg95 / Ventus 95 / A-95 Energy / 95 EVOX / 95 Perfekt. У Автотранс це EURO А-98.";
   if (state.settings.tier === "a92") return "бензин А-92";
   return "А-95 Євро · не 98";
 }
@@ -184,8 +184,8 @@ function brandLine(item) {
   let line = "";
   if (fuel === "lpg") line = "";
   else if (fuel === "diesel") {
-    line = tier === "premium" ? (b.diesel ? `зараз ДП+ ${b.diesel}` : "зараз ДП+") : "зараз ДП Євро";
-  } else if (tier === "premium") line = b.petrol ? `зараз А-95+ ${b.petrol}` : "зараз А-95+";
+    line = tier === "premium" ? (b.diesel ? `зараз ${b.diesel}` : "зараз ДП+") : "зараз ДП Євро";
+  } else if (tier === "premium") line = b.petrol ? `зараз ${b.petrol}` : "зараз А-95+";
   else if (tier === "a92") line = "зараз А-92";
   else line = "зараз А-95 Євро";
   if (line && item.source) line += ` · ${item.source}`;
@@ -261,9 +261,10 @@ function renderGrid(list) {
   if (isPhone()) {
     $("grid").innerHTML = `<div class="cards">${list
       .map((p, i) => {
-        const best = liters > 0 && p.fill != null && p.fill === cheapest;
+        const best = i === 0 && p.real != null;
         const open = state.openCard === p.id;
         return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""}">
+          ${best ? `<p class="m-best-tag">НАЙДЕШЕВША</p>` : ""}
           <button class="m-logo" type="button" data-open="${p.id}" aria-expanded="${open}" aria-label="${p.name}, ${open ? "сховати деталі" : "показати деталі"}">
             ${logoMark(p)}
             <i class="m-logo-plus">${open ? "−" : "+"}</i>
@@ -344,31 +345,6 @@ function fmtRemain(ms) {
 }
 
 function renderMeta() {
-  const d = state.data;
-  const live = d.live && !d.from_cache;
-  $("link-pill").textContent = live ? "LINK LIVE" : d.from_cache ? "LINK CACHE" : "LINK DOWN";
-  $("link-pill").className = "pill" + (live ? "" : " hot");
-  $("src-pill").textContent = hosted()
-    ? (d.alt_notes && d.alt_notes.length)
-      ? "SRC МІНФІН+МЕРЕЖІ"
-      : d.source_date
-        ? `SRC ${d.source_date}`
-        : "SRC —"
-    : d.customized
-      ? "ЗНИЖКИ РУЧНІ"
-      : (d.alt_notes && d.alt_notes.length)
-        ? "SRC МІНФІН+МЕРЕЖІ"
-        : d.source_date
-          ? `SRC ${d.source_date}`
-          : "SRC —";
-  $("src-pill").className = "pill" + (!hosted() && d.customized ? "" : " dim");
-  $("stamp").textContent = [
-    d.caption || "ціни мереж АЗК",
-    d.error ? `помилка: ${d.error}` : "",
-  ]
-    .filter(Boolean)
-    .join("  ·  ");
-  $("disclaimer").textContent = d.disclaimer || "";
   updateSyncClock();
 }
 
@@ -592,7 +568,7 @@ async function manualRefresh() {
   try {
     await load("/api/refresh");
   } catch (err) {
-    $("stamp").textContent = "оновлення не вдалося: " + err.message;
+    $("sync-last").textContent = "оновлення не вдалося: " + err.message;
   } finally {
     state.busy = false;
     $("refresh").disabled = false;
@@ -660,7 +636,7 @@ bind();
 applyHostedChrome();
 applyControls();
 load(pricesUrl()).catch((err) => {
-  $("stamp").textContent = "канал недоступний: " + err.message;
+  $("sync-last").textContent = "канал недоступний: " + err.message;
 });
 
 setInterval(() => {
