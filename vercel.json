@@ -3,7 +3,8 @@
   "regions": ["fra1"],
   "functions": {
     "app.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "data/**"
     }
   }
 }

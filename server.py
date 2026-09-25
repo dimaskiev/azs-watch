@@ -563,11 +563,22 @@ def scrape_minfin() -> dict[str, Any]:
     }
 
 
-def load_overrides() -> dict[str, Any]:
-    raw = load_json(OVERRIDES, {})
+def _overrides_map(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict) and isinstance(raw.get("overrides"), dict):
         return raw["overrides"]
     return raw if isinstance(raw, dict) else {}
+
+
+def load_overrides() -> dict[str, Any]:
+    for path in (DATA / "discounts.local.json", OVERRIDES):
+        found = _overrides_map(load_json(path, {}))
+        if found:
+            return found
+    try:
+        from discounts_bundled import BUNDLED_OVERRIDES
+    except ImportError:
+        return {}
+    return _overrides_map(BUNDLED_OVERRIDES)
 
 
 def parse_cut(value: Any) -> float | None:
@@ -894,6 +905,8 @@ def current_state() -> dict[str, Any]:
 
 
 def public_state(do_refresh: bool = False, rebuild: bool = False) -> dict[str, Any]:
+    if is_hosted() and not rebuild:
+        do_refresh = True
     if do_refresh:
         payload = refresh(force=True)
     elif rebuild:

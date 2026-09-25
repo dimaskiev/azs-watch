@@ -555,16 +555,20 @@ function bind() {
   });
 }
 
+function pricesUrl() {
+  return hosted() ? "/api/refresh" : "/api/state";
+}
+
 bind();
 applyHostedChrome();
 applyControls();
-load("/api/state").catch((err) => {
+load(pricesUrl()).catch((err) => {
   $("stamp").textContent = "канал недоступний: " + err.message;
 });
 
 setInterval(() => {
   if (state.busy || state.tab === "discounts") return;
-  load("/api/state").catch(() => {});
+  load(pricesUrl()).catch(() => {});
 }, hosted() ? 5 * 60 * 1000 : POLL_MS);
 
 let dueFetchAt = 0;
