@@ -192,41 +192,36 @@ function brandLine(item) {
   return line;
 }
 
-function logoLetters(item) {
-  const map = {
-    wog: "WOG",
-    okko: "OKKO",
-    ukrnafta: "UN",
-    upg: "UPG",
-    marshal: "MAR",
-    parallel: "PAR",
-    autotrans: "АТ",
-    klo: "KLO",
-    chipo: "CHI",
-    martin: "MTN",
-  };
-  return map[item.id] || String(item.name || "?").slice(0, 3).toUpperCase();
+const LOGO_SRC = {
+  wog: "logos/wog.svg",
+  okko: "logos/okko.svg",
+  ukrnafta: "logos/ukrnafta.svg",
+  upg: "logos/upg.svg",
+  marshal: "logos/marshal.svg",
+  parallel: "logos/parallel.svg",
+  autotrans: "logos/autotrans.svg",
+  klo: "logos/klo.svg",
+  chipo: "logos/chipo.png",
+  martin: "logos/martin.svg",
+};
+
+function logoSrc(item) {
+  return LOGO_SRC[item.id] || "";
 }
 
-function logoInk(hex) {
-  const c = String(hex || "#8fa35a").replace("#", "");
-  if (c.length < 6) return "#0b0d0a";
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.58 ? "#0b0d0a" : "#ece6d4";
-}
-
-function logoMark(item) {
-  const accent = item.accent || "#8fa35a";
-  const letters = logoLetters(item);
-  const tight = letters.length > 3 ? " tight" : "";
-  return `<span class="logo${tight}" style="--logo:${accent};--logo-ink:${logoInk(accent)}" aria-hidden="true"><span>${letters}</span></span>`;
+function logoMark(item, extraClass) {
+  const src = logoSrc(item);
+  const cls = extraClass ? ` ${extraClass}` : "";
+  if (!src) {
+    const name = String(item.name || "?").slice(0, 3).toUpperCase();
+    return `<span class="logo${cls}" aria-hidden="true"><span>${name}</span></span>`;
+  }
+  return `<span class="logo img${cls}" aria-hidden="true"><img src="${src}" alt=""></span>`;
 }
 
 function netCell(item, extra) {
   const brand = brandLine(item);
-  return `<div class="net"><span class="dot" style="background:${item.accent || "#8fa35a"}"></span><div><div>${item.name}${extra || ""}</div>${brand ? `<small class="net-brand">${brand}</small>` : ""}</div></div>`;
+  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${item.name}${extra || ""}</div>${brand ? `<small class="net-brand">${brand}</small>` : ""}</div></div>`;
 }
 
 function renderGrid(list) {
