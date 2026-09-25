@@ -86,23 +86,12 @@ function fuelKey() {
   return "a95";
 }
 
-function dieselPlusCopied() {
-  const region = state.settings.region;
-  const priced = (state.data && state.data.partners || []).filter((p) => {
-    const pack = (p.regions || {})[region];
-    return pack && pack.retail && pack.retail.diesel != null && pack.retail.dieselplus != null;
-  });
-  return priced.length > 0 && priced.every((p) => p.regions[region].retail.dieselplus === p.regions[region].retail.diesel);
-}
-
 function tierHint() {
   const fuel = state.settings.fuel;
   if (fuel === "lpg") return "автогаз";
   if (fuel === "diesel") {
     if (state.settings.tier === "premium") {
-      return dieselPlusCopied()
-        ? "ДП+ · окремої актуальної ціни немає, рахуємо як ДП Євро"
-        : "фірмовий ДП · Mustang+ / Pulls Diesel / upgDIESEL / Ventus Diesel / ДП Energy / ДП EVOX / ДП Perfekt";
+      return "фірмовий ДП · Mustang+ / Pulls Diesel / upgDIESEL / Ventus Diesel / ДП Energy / ДП EVOX / ДП Perfekt";
     }
     return "звичайний ДП Євро";
   }
@@ -188,7 +177,6 @@ function brandLine(item) {
   } else if (tier === "premium") line = b.petrol ? `зараз ${b.petrol}` : "зараз А-95+";
   else if (tier === "a92") line = "зараз А-92";
   else line = "зараз А-95 Євро";
-  if (line && item.source) line += ` · ${item.source}`;
   return line;
 }
 
@@ -229,16 +217,7 @@ function renderGrid(list) {
   const label = LABELS[fuelKey()];
   const region = state.settings.region;
   $("table-title").textContent = "ВАРТІСТЬ ЗАПРАВКИ ПО МЕРЕЖАХ";
-  const sameDiesel = fuelKey() === "dieselplus" && list.some((p) => {
-    const pack = (p.regions || {})[region];
-    return pack && pack.retail && pack.retail.diesel != null && pack.retail.dieselplus === pack.retail.diesel;
-  });
-  const fromSites = list.filter((p) => p.source).map((p) => p.name);
-  $("table-sub").textContent = fromSites.length
-    ? `${label} · ${region} · ${liters} л · ${fromSites.join(", ")} — актуальна ціна з сайту мережі`
-    : sameDiesel
-      ? `${label} · ${region} · ${liters} л · окремої актуальної ціни ДП+ немає — цифра як у ДП Євро`
-      : `${label} · ${region} · ${liters} л · від найдешевшої до найдорожчої`;
+  $("table-sub").textContent = `${label} · ${region} · ${liters} л`;
 
   if (!list.length) {
     $("grid").innerHTML = `<p class="empty">У вибраній області немає партнерів Армія+ з ціною на ${label}.</p>`;
