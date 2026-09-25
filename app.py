@@ -42,16 +42,16 @@ def api_discounts_save():
     if core.is_hosted():
         return _discounts_local_only()
     body = request.get_json(silent=True) or {}
-    core.save_overrides(body.get("overrides") or {})
-    return _api({"ok": True, "editor": core.discounts_editor(), "state": core.public_state(rebuild=True)})
+    published = core.save_overrides(body.get("overrides") or {})
+    return _api({"ok": True, "published": published, "editor": core.discounts_editor(), "state": core.public_state(rebuild=True)})
 
 
 @app.post("/api/discounts/reset")
 def api_discounts_reset():
     if core.is_hosted():
         return _discounts_local_only()
-    core.save_json(core.OVERRIDES, {"updated": core.now_iso(), "overrides": {}})
-    return _api({"ok": True, "editor": core.discounts_editor(), "state": core.public_state(rebuild=True)})
+    published = core.reset_overrides()
+    return _api({"ok": True, "published": published, "editor": core.discounts_editor(), "state": core.public_state(rebuild=True)})
 
 
 @app.get("/")

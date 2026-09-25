@@ -456,7 +456,9 @@ async function saveEditor() {
       paint();
     }
     renderEditor();
-    $("edit-status").textContent = "збережено · розрахунок оновлено";
+    $("edit-status").textContent = payload.published && payload.published.synced
+      ? "збережено · знижки відправлені на прод"
+      : "збережено локально · на прод не вдалося відправити";
   } catch (err) {
     $("edit-status").textContent = "не вдалося зберегти: " + err.message;
   } finally {
@@ -476,7 +478,9 @@ async function resetEditor() {
       paint();
     }
     renderEditor();
-    $("edit-status").textContent = "повернуто каталог публічних анонсів";
+    $("edit-status").textContent = payload.published && payload.published.synced
+      ? "каталог відправлено на прод"
+      : "повернуто каталог локально";
   } finally {
     $("reset-discounts").disabled = false;
   }

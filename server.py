@@ -8,6 +8,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import threading
 import time
 import webbrowser
@@ -640,7 +641,7 @@ def discounts_editor() -> dict[str, Any]:
     return {"ok": True, "rows": rows, "keys": list(FUEL_KEYS), "customized": dirty}
 
 
-def save_overrides(form: dict[str, Any]) -> None:
+def save_overrides(form: dict[str, Any]) -> dict[str, Any]:
     catalog = {p["id"]: p.get("discounts") or {} for p in load_json(PARTNERS, {"partners": []}).get("partners", [])}
     overrides: dict[str, Any] = {}
     for pid, vals in form.items():
@@ -657,7 +658,51 @@ def save_overrides(form: dict[str, Any]) -> None:
             diff["dieselplus"] = diff["diesel"]
         if diff:
             overrides[pid] = diff
-    save_json(OVERRIDES, {"updated": now_iso(), "overrides": overrides})
+    payload = {"updated": now_iso(), "overrides": overrides}
+    save_json(OVERRIDES, payload)
+    write_bundled_overrides(payload)
+    return sync_discounts_to_origin()
+
+
+def reset_overrides() -> dict[str, Any]:
+    payload = {"updated": now_iso(), "overrides": {}}
+    save_json(OVERRIDES, payload)
+    write_bundled_overrides(payload)
+    return sync_discounts_to_origin()
+
+
+def write_bundled_overrides(payload: dict[str, Any]) -> None:
+    body = json.dumps(payload, ensure_ascii=False, indent=4)
+    body = body.replace(": true", ": True").replace(": false", ": False").replace(": null", ": None")
+    (ROOT / "discounts_bundled.py").write_text(
+        '"""Local Army+ cuts shipped with the app so Vercel cannot miss the JSON file."""\n\n'
+        f"BUNDLED_OVERRIDES = {body}\n",
+        encoding="utf-8",
+    )
+
+
+def sync_discounts_to_origin() -> dict[str, Any]:
+    if is_hosted() or not (ROOT / ".git").exists():
+        return {"synced": False, "detail": "no git"}
+    files = ["data/discounts.local.json", "discounts_bundled.py"]
+    try:
+        subprocess.run(["git", "add", "--", *files], cwd=ROOT, check=True, capture_output=True, text=True)
+        staged = subprocess.run(["git", "diff", "--cached", "--quiet", "--", *files], cwd=ROOT)
+        if staged.returncode != 0:
+            commit = subprocess.run(
+                ["git", "commit", "-m", "Sync local Army+ discounts to production."],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            if commit.returncode != 0:
+                return {"synced": False, "detail": (commit.stderr or commit.stdout).strip()}
+        push = subprocess.run(["git", "push", "origin", "HEAD"], cwd=ROOT, capture_output=True, text=True)
+        if push.returncode != 0:
+            return {"synced": False, "detail": (push.stderr or push.stdout).strip() or "push failed"}
+        return {"synced": True}
+    except Exception as exc:
+        return {"synced": False, "detail": str(exc)}
 
 
 def rebuild_prices() -> dict[str, Any]:
@@ -986,12 +1031,12 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"ok": False, "error": "Редактор знижок лише локально"}, 404)
                 return
         if path == "/api/discounts":
-            save_overrides(body.get("overrides") or {})
-            self._json({"ok": True, "editor": discounts_editor(), "state": public_state(rebuild=True)})
+            published = save_overrides(body.get("overrides") or {})
+            self._json({"ok": True, "published": published, "editor": discounts_editor(), "state": public_state(rebuild=True)})
             return
         if path == "/api/discounts/reset":
-            save_json(OVERRIDES, {"updated": now_iso(), "overrides": {}})
-            self._json({"ok": True, "editor": discounts_editor(), "state": public_state(rebuild=True)})
+            published = reset_overrides()
+            self._json({"ok": True, "published": published, "editor": discounts_editor(), "state": public_state(rebuild=True)})
             return
         self._json({"ok": False, "error": "unknown endpoint"}, 404)
 
