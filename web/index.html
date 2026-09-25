@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=12" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23131810' width='32' height='32'/%3E%3Cpath fill='%238fa35a' d='M16 4l10 6v12l-10 6-10-6V10z'/%3E%3Cpath fill='%230d0f0c' d='M16 9l6 3.5v7L16 23l-6-3.5v-7z'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -93,7 +93,11 @@
           <p class="step-n">03 · ОБСЯГ</p>
           <label class="opt">
             <span>Літрів у бак</span>
-            <input id="liters" type="number" inputmode="decimal" min="5" max="200" step="5" value="40" />
+            <div class="liter-stepper">
+              <button class="liter-btn" id="liters-minus" type="button" aria-label="Менше літрів">−</button>
+              <input id="liters" type="number" inputmode="decimal" min="0" max="200" step="1" value="40" />
+              <button class="liter-btn plus" id="liters-plus" type="button" aria-label="Більше літрів">+</button>
+            </div>
           </label>
         </div>
       </div>
@@ -140,6 +144,6 @@
     <p>Як скористатися: Армія+ → Сервіси → Плюси → QR на касі АЗК. Дашборд не замінює застосунок.</p>
   </footer>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

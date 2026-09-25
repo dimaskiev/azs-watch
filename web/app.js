@@ -28,6 +28,7 @@ const state = {
   busy: false,
   tab: "calc",
   editor: null,
+  openCard: null,
 };
 
 function loadSettings() {
@@ -191,6 +192,38 @@ function brandLine(item) {
   return line;
 }
 
+function logoLetters(item) {
+  const map = {
+    wog: "WOG",
+    okko: "OKKO",
+    ukrnafta: "UN",
+    upg: "UPG",
+    marshal: "MAR",
+    parallel: "PAR",
+    autotrans: "АТ",
+    klo: "KLO",
+    chipo: "CHI",
+    martin: "MTN",
+  };
+  return map[item.id] || String(item.name || "?").slice(0, 3).toUpperCase();
+}
+
+function logoInk(hex) {
+  const c = String(hex || "#8fa35a").replace("#", "");
+  if (c.length < 6) return "#0b0d0a";
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.58 ? "#0b0d0a" : "#ece6d4";
+}
+
+function logoMark(item) {
+  const accent = item.accent || "#8fa35a";
+  const letters = logoLetters(item);
+  const tight = letters.length > 3 ? " tight" : "";
+  return `<span class="logo${tight}" style="--logo:${accent};--logo-ink:${logoInk(accent)}" aria-hidden="true"><span>${letters}</span></span>`;
+}
+
 function netCell(item, extra) {
   const brand = brandLine(item);
   return `<div class="net"><span class="dot" style="background:${item.accent || "#8fa35a"}"></span><div><div>${item.name}${extra || ""}</div>${brand ? `<small class="net-brand">${brand}</small>` : ""}</div></div>`;
@@ -233,21 +266,45 @@ function renderGrid(list) {
   if (isPhone()) {
     $("grid").innerHTML = `<div class="cards">${list
       .map((p, i) => {
-        const best = p.fill != null && p.fill === cheapest;
-        return `<article class="m-card ${best ? "best" : ""}">
-          <div class="m-head">
-            <span class="m-rank">${String(i + 1).padStart(2, "0")}</span>
-            <h3><span class="dot" style="background:${p.accent || "#8fa35a"}"></span>${p.name}${best ? " · оптимум" : ""}</h3>
-            ${brandLine(p) ? `<p class="net-brand">${brandLine(p)}</p>` : ""}
+        const best = liters > 0 && p.fill != null && p.fill === cheapest;
+        const open = state.openCard === p.id;
+        return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""}">
+          <button class="m-logo" type="button" data-open="${p.id}" aria-expanded="${open}" aria-label="${p.name}, ${open ? "сховати деталі" : "показати деталі"}">
+            ${logoMark(p)}
+            <i class="m-logo-plus">${open ? "−" : "+"}</i>
+          </button>
+          <div class="m-sum">
+            <div class="m-cell hi">
+              <span>з Армія+</span>
+              <b>${p.real != null ? money(p.real) : "—"}</b>
+              <em>грн/л</em>
+            </div>
+            <div class="m-cell">
+              <span>заправка</span>
+              <b>${p.fill != null ? money(p.fill) : "—"}</b>
+              <em>грн</em>
+            </div>
+            <div class="m-cell save">
+              <span>економія</span>
+              <b>${p.saved != null ? "−" + money(p.saved) : "—"}</b>
+              <em>грн</em>
+            </div>
           </div>
-          <div class="m-prices">
-            <div><span>Стеля</span><b>${money(p.retail)}</b></div>
-            <div><span>Знижка</span><b>${p.discount != null ? "−" + money(p.discount) : "—"}</b></div>
-            <div class="hi"><span>З Армія+</span><b>${p.real != null ? money(p.real) : "—"}</b></div>
+          <div class="m-detail"${open ? "" : " hidden"}>
+            <div class="m-head">
+              <span class="m-rank">${String(i + 1).padStart(2, "0")}</span>
+              <h3>${p.name}${best ? " · оптимум" : ""}</h3>
+              ${brandLine(p) ? `<p class="net-brand">${brandLine(p)}</p>` : ""}
+            </div>
+            <div class="m-prices">
+              <div><span>Стеля</span><b>${money(p.retail)}</b></div>
+              <div><span>Знижка</span><b>${p.discount != null ? "−" + money(p.discount) : "—"}</b></div>
+              <div class="hi"><span>З Армія+</span><b>${p.real != null ? money(p.real) : "—"}</b></div>
+            </div>
+            <p class="m-fill">${liters} л = <b>${p.fill != null ? money(p.fill) : "—"}</b> грн</p>
+            <p class="m-save">економія ${p.saved != null ? money(p.saved) : "—"} грн</p>
+            <p class="m-note">${[p.limit, ...(p.extras || [])].filter(Boolean).join(" · ")}</p>
           </div>
-          <p class="m-fill">${liters} л = <b>${p.fill != null ? money(p.fill) : "—"}</b> грн</p>
-          <p class="m-save">економія ${p.saved != null ? money(p.saved) : "—"} грн</p>
-          <p class="m-note">${[p.limit, ...(p.extras || [])].filter(Boolean).join(" · ")}</p>
         </article>`;
       })
       .join("")}</div>`;
@@ -256,7 +313,7 @@ function renderGrid(list) {
 
   const body = list
     .map((p, i) => {
-      const best = p.fill != null && p.fill === cheapest;
+      const best = liters > 0 && p.fill != null && p.fill === cheapest;
       return `<tr class="${best ? "best" : ""}">
         <td>${String(i + 1).padStart(2, "0")}</td>
         <td>${netCell(p, best ? " · оптимум" : "")}</td>
@@ -342,6 +399,29 @@ function fillRegions() {
   state.settings.region = sel.value;
 }
 
+function clampLiters(n) {
+  if (n == null || Number.isNaN(n)) return 0;
+  return Math.min(200, Math.max(0, n));
+}
+
+function readLitersInput() {
+  const raw = $("liters").value.trim();
+  if (raw === "" || raw === "." || raw === ",") return null;
+  const n = Number(raw.replace(",", "."));
+  if (Number.isNaN(n)) return null;
+  return clampLiters(n);
+}
+
+function setLiters(n) {
+  state.settings.liters = clampLiters(n);
+  saveSettings();
+  paint();
+}
+
+function bumpLiters(delta) {
+  setLiters((Number(state.settings.liters) || 0) + delta);
+}
+
 function applyControls() {
   document.querySelectorAll(".fuel").forEach((btn) => {
     btn.classList.toggle("on", btn.dataset.fuel === state.settings.fuel);
@@ -373,7 +453,12 @@ function applyControls() {
     btn.classList.toggle("on", btn.dataset.tier === state.settings.tier);
   });
   $("tier-hint").textContent = tierHint();
-  $("liters").value = state.settings.liters;
+  if (document.activeElement !== $("liters")) {
+    $("liters").value = state.settings.liters;
+  }
+  const litersNow = clampLiters(Number(state.settings.liters));
+  if ($("liters-minus")) $("liters-minus").disabled = litersNow <= 0;
+  if ($("liters-plus")) $("liters-plus").disabled = litersNow >= 200;
 }
 
 function showTab(tab) {
@@ -541,8 +626,21 @@ function bind() {
     });
   });
   $("liters").addEventListener("input", () => {
-    state.settings.liters = Math.max(1, Number($("liters").value) || 40);
+    const n = readLitersInput();
+    if (n == null) return;
+    state.settings.liters = n;
     saveSettings();
+    paint();
+  });
+  $("liters").addEventListener("blur", () => {
+    setLiters(readLitersInput() ?? 0);
+  });
+  $("liters-minus").addEventListener("click", () => bumpLiters(-1));
+  $("liters-plus").addEventListener("click", () => bumpLiters(1));
+  $("grid").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-open]");
+    if (!btn) return;
+    state.openCard = state.openCard === btn.dataset.open ? null : btn.dataset.open;
     paint();
   });
   $("refresh").addEventListener("click", () => {
