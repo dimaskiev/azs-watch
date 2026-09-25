@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+data/cache.json
+data/discounts.local.json
+data/*.tmp
+_minfin_*.html
+.DS_Store
+Thumbs.db
+.vercel
+.env
+.venv
+venv/

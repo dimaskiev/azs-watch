@@ -1,0 +1,123 @@
+{
+  "program": "Плюси · Армія+",
+  "updated": "2026-09-25",
+  "disclaimer": "Знижки зібрані з публічних анонсів МОУ, мереж АЗК та aplus.mod.gov.ua. Умови можуть змінюватися — перед заправкою звіряйте QR у застосунку Армія+.",
+  "partners": [
+    {
+      "id": "wog",
+      "name": "WOG",
+      "minfin": ["WOG"],
+      "slug": "wog",
+      "accent": "#e30613",
+      "discounts": { "a95plus": 6.0, "a95": 6.0, "a92": 6.0, "diesel": 6.0, "dieselplus": 6.0, "lpg": 2.5 },
+      "branded": { "petrol": "Mustang", "diesel": "Mustang+" },
+      "extras": ["20% WOG Cafe", "10% WOG Market"],
+      "limit": "QR на кожну покупку, без ліміту на пальне",
+      "shareable": false
+    },
+    {
+      "id": "okko",
+      "name": "ОККО",
+      "minfin": ["ОККО", "OKKO"],
+      "slug": "okko",
+      "accent": "#f39200",
+      "discounts": { "a95plus": 4.0, "a95": 4.0, "a92": 4.0, "diesel": 4.0, "dieselplus": 4.0, "lpg": 2.0 },
+      "branded": { "petrol": "Pulls", "diesel": "Pulls Diesel" },
+      "extras": ["20% кафе", "10% маркет"],
+      "limit": "До 200 л/міс зі знижкою",
+      "shareable": false
+    },
+    {
+      "id": "ukrnafta",
+      "name": "UKRNAFTA",
+      "minfin": ["UKRNAFTA"],
+      "slug": "ukrnafta",
+      "accent": "#1e4b9c",
+      "discounts": { "a95plus": 3.0, "a95": 3.0, "a92": 3.0, "diesel": 3.0, "dieselplus": 3.0, "lpg": 0.5 },
+      "extras": ["30% меню АЗК"],
+      "limit": "До 200 л/міс; кафе до 2000 грн/міс",
+      "shareable": false
+    },
+    {
+      "id": "upg",
+      "name": "UPG",
+      "minfin": ["UPG"],
+      "slug": "upg",
+      "accent": "#2e8b57",
+      "discounts": { "a95plus": 3.0, "a95": 2.0, "a92": 2.0, "diesel": 2.0, "dieselplus": 3.0, "lpg": null },
+      "branded": { "petrol": "EVOX", "diesel": "EVOX" },
+      "extras": ["20% UPG cafe", "10% маркет"],
+      "limit": "EVOX −3 грн/л, Євро −2 грн/л",
+      "shareable": false
+    },
+    {
+      "id": "marshal",
+      "name": "Marshal",
+      "minfin": ["Marshal"],
+      "slug": "marshal",
+      "accent": "#4a6fa5",
+      "discounts": { "a95plus": 3.0, "a95": 2.0, "a92": 2.0, "diesel": 2.0, "dieselplus": 3.0, "lpg": 1.0 },
+      "branded": { "petrol": "EVOX", "diesel": "EVOX" },
+      "extras": ["20% кафе", "10% маркет"],
+      "limit": "EVOX −3 грн/л, Євро/100 −2 грн/л",
+      "shareable": false
+    },
+    {
+      "id": "parallel",
+      "name": "Parallel",
+      "minfin": ["Parallel"],
+      "slug": "parallel",
+      "accent": "#0e7c7b",
+      "discounts": { "a95plus": 4.0, "a95": 2.0, "a92": 2.0, "diesel": 2.0, "dieselplus": 4.0, "lpg": 1.0 },
+      "branded": { "petrol": "PERFEKT", "diesel": "PERFEKT" },
+      "extras": ["20% кафе", "10% маркет"],
+      "limit": "PERFEKT −4 грн/л, Євро −2 грн/л",
+      "shareable": false
+    },
+    {
+      "id": "autotrans",
+      "name": "Автотранс",
+      "minfin": ["Автотранс"],
+      "slug": "avtotrans",
+      "accent": "#c9a227",
+      "discounts": { "a95plus": 4.0, "a95": 4.0, "a92": 4.0, "diesel": 4.0, "dieselplus": 4.0, "lpg": 2.0 },
+      "extras": ["−10 грн на каву", "10% магазин"],
+      "limit": "Не сумується з іншими акціями мережі",
+      "shareable": false
+    },
+    {
+      "id": "klo",
+      "name": "KLO",
+      "minfin": ["KLO"],
+      "slug": "klo",
+      "accent": "#d35400",
+      "discounts": { "a95plus": 4.0, "a95": 4.0, "a92": 4.0, "diesel": 4.0, "dieselplus": 4.0, "lpg": 2.0 },
+      "branded": { "petrol": "Ventus 95", "diesel": "Ventus Diesel" },
+      "extras": ["30% кава", "20% фастфуд", "10% маркет"],
+      "limit": "Код можна надсилати рідним",
+      "shareable": true
+    },
+    {
+      "id": "chipo",
+      "name": "Chipo",
+      "minfin": ["Chipo"],
+      "slug": "chipo",
+      "accent": "#8e44ad",
+      "discounts": { "a95plus": 2.0, "a95": 2.0, "a92": 2.0, "diesel": 3.0, "dieselplus": 3.0, "lpg": 1.0 },
+      "extras": ["20% кафе та маркет"],
+      "limit": "Дизель −3 грн/л, бензин −2 грн/л",
+      "shareable": false
+    },
+    {
+      "id": "martin",
+      "name": "Martin",
+      "minfin": ["Martin"],
+      "slug": "martin",
+      "accent": "#6b4f3a",
+      "discounts": { "a95plus": 2.0, "a95": 2.0, "a92": 2.0, "diesel": 2.0, "dieselplus": 2.0, "lpg": 0.5 },
+      "extras": ["50% кава", "20% кафе", "10% маркет"],
+      "limit": "Код можна надсилати рідним",
+      "shareable": true
+    }
+  ]
+}

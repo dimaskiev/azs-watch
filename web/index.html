@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d0a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AZS WATCH" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>AZS WATCH // АРМІЯ+</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23131810' width='32' height='32'/%3E%3Cpath fill='%238fa35a' d='M16 4l10 6v12l-10 6-10-6V10z'/%3E%3Cpath fill='%230d0f0c' d='M16 9l6 3.5v7L16 23l-6-3.5v-7z'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="top">
+    <div class="flag" aria-hidden="true"></div>
+    <div class="top-row">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" width="42" height="42">
+            <path d="M24 3 L44 14 V34 L24 45 L4 34 V14 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M24 12 L36 19 V29 L24 36 L12 29 V19 Z" fill="currentColor" opacity=".18"/>
+            <path d="M18 24 h12 M24 18 v12" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+        </div>
+        <div>
+          <p class="callsign">CALLSIGN · FUEL-01</p>
+          <h1>AZS WATCH</h1>
+          <p class="sub">МОНІТОР ПАЛЬНОГО · <b>ПЛЮСИ</b></p>
+        </div>
+      </div>
+      <div class="status-block">
+        <div class="pills">
+          <span class="pill" id="link-pill">LINK …</span>
+          <span class="pill dim" id="src-pill">SRC —</span>
+        </div>
+        <p class="stamp" id="stamp">очікування каналу</p>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Розділи">
+      <button class="tab on" type="button" data-tab="calc">РОЗРАХУНОК</button>
+      <button class="tab" type="button" data-tab="discounts">ЗНИЖКИ АРМІЯ+</button>
+    </nav>
+  </header>
+
+  <section class="command" id="view-calc">
+    <div class="frame">
+      <p class="frame-label">РОЗРАХУНОК ЗАПРАВКИ</p>
+      <div class="steps">
+        <div class="step">
+          <p class="step-n">01 · ПАЛЬНЕ</p>
+          <div class="fuel-switch" role="tablist" aria-label="Тип палива">
+            <button class="fuel on" data-fuel="petrol" type="button">
+              <span class="fuel-code" id="fuel-petrol-code">А-95</span>
+              <span>Бензин</span>
+            </button>
+            <button class="fuel" data-fuel="diesel" type="button">
+              <span class="fuel-code">ДП</span>
+              <span>Дизель</span>
+            </button>
+            <button class="fuel" data-fuel="lpg" type="button">
+              <span class="fuel-code">LPG</span>
+              <span>Газ</span>
+            </button>
+          </div>
+          <div class="tier-switch" id="tier-wrap">
+            <button class="tier extra" type="button" data-tier="a92" id="tier-a92">
+              <span class="tier-code">А-92</span>
+              <span class="tier-name">звичайний</span>
+            </button>
+            <button class="tier on" type="button" data-tier="regular" id="tier-regular">
+              <span class="tier-code" id="tier-regular-code">А-95</span>
+              <span class="tier-name" id="tier-regular-name">Євро</span>
+            </button>
+            <button class="tier" type="button" data-tier="premium" id="tier-premium">
+              <span class="tier-code" id="tier-premium-code">А-95+</span>
+              <span class="tier-name" id="tier-premium-name">фірмовий</span>
+            </button>
+          </div>
+          <p class="tier-hint" id="tier-hint">А-95 Євро</p>
+        </div>
+        <div class="step">
+          <p class="step-n">02 · ОБЛАСТЬ</p>
+          <label class="opt">
+            <span>Де заправляєтесь</span>
+            <select id="region"></select>
+          </label>
+        </div>
+        <div class="step">
+          <p class="step-n">03 · ОБСЯГ</p>
+          <label class="opt">
+            <span>Літрів у бак</span>
+            <input id="liters" type="number" inputmode="decimal" min="5" max="200" step="5" value="40" />
+          </label>
+        </div>
+      </div>
+      <div class="sync">
+        <div class="sync-meta">
+          <span id="sync-last">останнє оновлення: —</span>
+          <span id="sync-next">авто через —</span>
+        </div>
+        <button class="ghost" id="refresh" type="button">ОНОВИТИ ЗАРАЗ</button>
+      </div>
+    </div>
+
+  <section class="kpis" id="kpis"></section>
+  <section class="board">
+    <div class="table-head">
+      <h2 id="table-title">ТАБЛИЦЯ МЕРЕЖ</h2>
+      <p id="table-sub"></p>
+    </div>
+    <div class="table-wrap" id="grid"></div>
+  </section>
+  </section>
+
+  <section class="command hidden" id="view-discounts">
+    <div class="frame">
+      <p class="frame-label">РУЧНІ ЗНИЖКИ</p>
+      <p class="edit-lead">Цифри з відкритих анонсів можуть відрізнятися від того, що зараз у застосунку Армія+. Впишіть актуальні грн/л — розрахунок одразу візьме ваші значення. Порожнє поле = знижки немає.</p>
+      <div class="sync">
+        <div class="sync-meta">
+          <span id="edit-status">каталог публічних анонсів</span>
+        </div>
+        <div class="edit-actions">
+          <button class="ghost" id="reset-discounts" type="button">СКИНУТИ КАТАЛОГ</button>
+          <button class="ghost save" id="save-discounts" type="button">ЗБЕРЕГТИ ЗНИЖКИ</button>
+        </div>
+      </div>
+    </div>
+    <div class="board">
+      <div class="table-wrap" id="edit-grid"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p id="disclaimer"></p>
+    <p>Як скористатися: Армія+ → Сервіси → Плюси → QR на касі АЗК. Дашборд не замінює застосунок.</p>
+  </footer>
+
+  <script src="app.js?v=6"></script>
+</body>
+</html>
