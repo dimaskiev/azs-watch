@@ -145,13 +145,23 @@ function sortedRows() {
   });
 }
 
+function cheapestReal(list) {
+  return list.reduce((m, p) => (p.real != null && (m == null || p.real < m) ? p.real : m), null);
+}
+
+function isCheapest(item, list) {
+  const low = cheapestReal(list);
+  return low != null && item.real != null && item.real === low;
+}
+
 function renderKpis(list) {
   const priced = list.filter((x) => x.real != null).slice().sort((a, b) => a.real - b.real);
   const best = priced[0];
+  const ties = priced.filter((x) => best && x.real === best.real);
   const liters = Number(state.settings.liters) || 0;
   const saveSum = best && best.discount != null ? best.discount * liters : null;
   $("kpis").innerHTML = [
-    kpi("ОПТИМУМ", best ? money(best.real) : "—", best ? `${best.name} · грн/л` : "немає в області"),
+    kpi("ОПТИМУМ", best ? money(best.real) : "—", best ? `${ties.map((x) => x.name).join(", ")} · грн/л` : "немає в області"),
     kpi("ЗАПРАВКА", best && best.fill != null ? money(best.fill) : "—", `${liters} л на найдешевшій`),
     kpi("ЕКОНОМІЯ", saveSum != null ? `−${money(saveSum)}` : "—", `${liters} л зі знижкою`),
     kpi("МЕРЕЖ В ОБЛАСТІ", String(list.length), "партнери Плюсів з цим пальним"),
@@ -207,9 +217,10 @@ function logoMark(item, extraClass) {
   return `<span class="logo img${cls}" aria-hidden="true"><img src="${src}" alt=""></span>`;
 }
 
-function netCell(item, extra) {
+function netCell(item, best) {
   const brand = brandLine(item);
-  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${item.name}${extra || ""}</div>${brand ? `<small class="net-brand">${brand}</small>` : ""}</div></div>`;
+  const tag = best ? `<span class="opt-tag">оптимум</span>` : "";
+  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${item.name}${tag}</div>${brand ? `<small class="net-brand">${brand}</small>` : ""}</div></div>`;
 }
 
 function renderGrid(list) {
@@ -236,11 +247,10 @@ function renderGrid(list) {
       <th>Умови</th>
     </tr></thead>`;
 
-  const cheapest = list.reduce((m, p) => (p.fill != null && (m == null || p.fill < m) ? p.fill : m), null);
   if (isPhone()) {
     $("grid").innerHTML = `<div class="cards">${list
       .map((p, i) => {
-        const best = i === 0 && p.real != null;
+        const best = isCheapest(p, list);
         const open = state.openCard === p.id;
         return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""}">
           ${best ? `<p class="m-best-tag">НАЙДЕШЕВША</p>` : ""}
@@ -268,7 +278,7 @@ function renderGrid(list) {
           <div class="m-detail"${open ? "" : " hidden"}>
             <div class="m-head">
               <span class="m-rank">${String(i + 1).padStart(2, "0")}</span>
-              <h3>${p.name}${best ? " · оптимум" : ""}</h3>
+              <h3>${p.name}</h3>
               ${brandLine(p) ? `<p class="net-brand">${brandLine(p)}</p>` : ""}
             </div>
             <div class="m-prices">
@@ -288,10 +298,10 @@ function renderGrid(list) {
 
   const body = list
     .map((p, i) => {
-      const best = liters > 0 && p.fill != null && p.fill === cheapest;
+      const best = isCheapest(p, list);
       return `<tr class="${best ? "best" : ""}">
         <td>${String(i + 1).padStart(2, "0")}</td>
-        <td>${netCell(p, best ? " · оптимум" : "")}</td>
+        <td>${netCell(p, best)}</td>
         <td class="num">${money(p.retail)}</td>
         <td class="num">${p.discount != null ? "−" + money(p.discount) : "—"}</td>
         <td class="num real">${p.real != null ? money(p.real) : "—"}</td>

@@ -353,6 +353,18 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   color: #111; background: var(--sage); padding: 2px 7px; font-weight: 700;
 }
 .net { margin: 0; font-family: "Chakra Petch", sans-serif; font-size: 26px; letter-spacing: .02em; }
+.opt-tag {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 3px 8px;
+  background: var(--sage);
+  color: #10140e;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  vertical-align: middle;
+}
 .meta { margin: 4px 0 12px; color: var(--mute); font-size: 13px; }
 .price-row {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;
