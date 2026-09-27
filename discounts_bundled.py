@@ -1,15 +1,12 @@
 """Local Army+ cuts shipped with the app so Vercel cannot miss the JSON file."""
 
 BUNDLED_OVERRIDES = {
-    "updated": "2026-09-25T16:17:09+03:00",
+    "updated": "2026-09-27T16:08:30+03:00",
     "overrides": {
         "wog": {
             "a95plus": 7.0,
-            "a95": 7.0,
-            "a92": 7.0,
-            "diesel": 7.0,
             "dieselplus": 7.0,
-            "lpg": 3.0,
+            "lpg": 3.0
         },
         "okko": {
             "a95plus": 7.0,
@@ -17,12 +14,12 @@ BUNDLED_OVERRIDES = {
             "a92": 6.0,
             "diesel": 6.0,
             "dieselplus": 7.0,
-            "lpg": 3.0,
+            "lpg": 3.0
         },
         "upg": {
             "a95plus": 2.0,
             "dieselplus": 2.0,
-            "lpg": 1.0,
+            "lpg": 1.0
         },
         "marshal": {
             "a95plus": 3.5,
@@ -30,12 +27,12 @@ BUNDLED_OVERRIDES = {
             "a92": 3.5,
             "diesel": 3.5,
             "dieselplus": 3.5,
-            "lpg": 1.5,
+            "lpg": 1.5
         },
         "parallel": {
             "a95": 4.0,
             "a92": 4.0,
-            "diesel": 4.0,
+            "diesel": 4.0
         },
         "autotrans": {
             "a95plus": 2.0,
@@ -43,7 +40,7 @@ BUNDLED_OVERRIDES = {
             "a92": 2.0,
             "diesel": 2.0,
             "dieselplus": 2.0,
-            "lpg": 1.0,
-        },
-    },
+            "lpg": 1.0
+        }
+    }
 }
