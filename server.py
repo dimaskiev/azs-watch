@@ -62,8 +62,9 @@ UPG_PRICES = "https://upg.ua/cini-na-palne/"
 KLO_HOME = "https://klo.ua/"
 PARALLEL_STATIONS = "https://backend.parallel.ua/api/station/get"
 AUTOTRANS_PRICES = "https://autotrans.ua/informaciya-i-ceny"
+AGRARII_AZS = "https://agrarii-razom.com.ua/fuel/azs/{slug}"
 SHINA_PRICES = "https://shinapro.in.ua/tsiny-na-palne/"
-AUTORIA_PRICES = "https://auto.ria.com/uk/toplivo/"
+AUTORIA_PRICES = "https://auto.ria.com/uk/toplivo/upd/"
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -106,6 +107,19 @@ AUTORIA_ALIASES = {
     "Chipo": ("Chipo",),
     "Martin": ("Martin",),
     "MARTIN": ("Martin",),
+}
+AGRARII_SLUGS = {
+    "ukrnafta": ("UKRNAFTA",),
+    "marshal": ("Marshal",),
+    "chipo": ("Chipo",),
+}
+AGRARII_LABELS = {
+    "a-95+": "a95plus",
+    "a-95": "a95",
+    "a-92": "a92",
+    "дп": "diesel",
+    "газ": "lpg",
+    "газ (lpg)": "lpg",
 }
 
 _lock = threading.RLock()
@@ -242,6 +256,12 @@ def parse_page_stamp(html: str) -> datetime | None:
     if iso_day:
         try:
             return datetime(int(iso_day.group(1)), int(iso_day.group(2)), int(iso_day.group(3)), tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    iso_near = re.search(r"оновлен[ао]\w*.{0,160}?(\d{4})-(\d{2})-(\d{2})", html, re.I | re.S)
+    if iso_near:
+        try:
+            return datetime(int(iso_near.group(1)), int(iso_near.group(2)), int(iso_near.group(3)), tzinfo=timezone.utc)
         except ValueError:
             return None
     return None
@@ -506,6 +526,65 @@ def parse_autotrans_official(html: str) -> dict[str, float]:
     return fuels
 
 
+def looks_like_station_price(price: float) -> bool:
+    """Skip aggregator means like 89.83; keep typical pump endings."""
+    cents = int(round(float(price) * 100)) % 100
+    return cents in {0, 40, 50, 70, 80, 90} or cents % 10 == 9
+
+
+def _agrarii_fuel_key(label: str) -> str | None:
+    raw = re.sub(r"\s+", " ", (label or "").lower()).strip()
+    if raw in AGRARII_LABELS:
+        return AGRARII_LABELS[raw]
+    if raw.startswith("газ"):
+        return "lpg"
+    if raw.startswith("дп"):
+        return "diesel"
+    return None
+
+
+def parse_agrarii_network(html: str) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+    if not stamp_is_fresh(parse_page_stamp(html)):
+        return {}, {}
+    tables = re.findall(r"<table[^>]*>(.*?)</table>", html, re.S | re.I)
+    national: dict[str, float] = {}
+    if tables:
+        for row in re.finditer(r"<tr>(.*?)</tr>", tables[0], re.S | re.I):
+            cells = [re.sub(r"<[^>]+>", " ", cell) for cell in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row.group(1), re.S | re.I)]
+            cells = [re.sub(r"\s+", " ", cell).strip() for cell in cells]
+            if len(cells) < 5:
+                continue
+            key = _agrarii_fuel_key(cells[0])
+            price = parse_number(cells[4])
+            if key and price is not None:
+                national[key] = price
+    regional: dict[str, dict[str, float]] = {}
+    if len(tables) < 2:
+        return national, regional
+    rows = list(re.finditer(r"<tr>(.*?)</tr>", tables[1], re.S | re.I))
+    if not rows:
+        return national, regional
+    header = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", c)).strip() for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[0].group(1), re.S | re.I)]
+    keys = [_agrarii_fuel_key(label) for label in header[1:]]
+    for row in rows[1:]:
+        cells = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", c)).strip() for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row.group(1), re.S | re.I)]
+        if not cells:
+            continue
+        region = match_region_name(cells[0])
+        if not region:
+            continue
+        fuels: dict[str, float] = {}
+        for key, raw in zip(keys, cells[1:]):
+            if not key:
+                continue
+            price = parse_number(raw)
+            if price is not None:
+                fuels[key] = price
+        if fuels:
+            regional[region] = fuels
+    return national, regional
+
+
 def parse_autoria(html: str) -> dict[str, dict[str, float]]:
     if not stamp_is_fresh(parse_page_stamp(html)):
         return {}
@@ -522,6 +601,8 @@ def parse_autoria(html: str) -> dict[str, dict[str, float]]:
         if not aliases:
             continue
         cells = re.findall(r"<td[^>]*>(.*?)</td>", row.group(1), re.S | re.I)
+        if name_m.group(0).lower().lstrip().startswith("<td"):
+            cells = cells[1:]
         fuels: dict[str, float] = {}
         for key, cell in zip(keys, cells):
             if key == "a100":
@@ -530,7 +611,7 @@ def parse_autoria(html: str) -> dict[str, dict[str, float]]:
             if re.search(r"—|&mdash;|^[\s\-]*$", raw):
                 continue
             price = parse_number(raw)
-            if price is not None:
+            if price is not None and looks_like_station_price(price):
                 fuels[key] = price
         if fuels:
             for alias in aliases:
@@ -619,6 +700,10 @@ def fetch_alt_prices() -> tuple[
         ("autotrans", AUTOTRANS_PRICES, "autotrans.ua"),
         ("shina", SHINA_PRICES, "shinapro.in.ua"),
         ("autoria", AUTORIA_PRICES, "auto.ria.com"),
+        *[
+            (f"agrarii:{slug}", AGRARII_AZS.format(slug=slug), "agrarii-razom.com.ua")
+            for slug in AGRARII_SLUGS
+        ],
     ]
 
     def load_one(job: tuple[str, str, str]) -> tuple[str, str, str, str]:
@@ -636,6 +721,8 @@ def fetch_alt_prices() -> tuple[
             elif err:
                 notes.append(f"{label}: {err}")
 
+    from_official: set[str] = set()
+
     official = [
         ("okko", ("ОККО", "OKKO"), parse_okko_official),
         ("wog", ("WOG",), parse_wog_official),
@@ -649,6 +736,7 @@ def fetch_alt_prices() -> tuple[
         if not fuels:
             continue
         _put_fuels(merged, aliases, fuels, sources, f"{label} · сьогодні", True)
+        from_official.update(aliases)
         notes.append(f"{'/'.join(aliases)} · {label}")
 
     for kind in ("upg_prices", "upg"):
@@ -659,6 +747,7 @@ def fetch_alt_prices() -> tuple[
         if not fuels:
             continue
         _put_fuels(merged, ("UPG",), fuels, sources, f"{label} · сьогодні", True)
+        from_official.add("UPG")
         if by_region:
             regional["UPG"] = by_region
         notes.append(f"UPG · {label}")
@@ -669,6 +758,7 @@ def fetch_alt_prices() -> tuple[
         fuels, by_region = parse_parallel_stations(raw)
         if fuels:
             _put_fuels(merged, ("Parallel",), fuels, sources, f"{label} · сьогодні", True)
+            from_official.add("Parallel")
             regional["Parallel"] = by_region
             notes.append(f"Parallel · {label}")
 
@@ -677,13 +767,34 @@ def fetch_alt_prices() -> tuple[
         fuels = parse_autotrans_official(html)
         if fuels:
             _put_fuels(merged, ("Автотранс",), fuels, sources, f"{label} · сьогодні", True)
+            from_official.add("Автотранс")
             notes.append(f"Автотранс · {label}")
+
+    for slug, aliases in AGRARII_SLUGS.items():
+        kind = f"agrarii:{slug}"
+        if kind not in pages or any(alias in from_official for alias in aliases):
+            continue
+        label, html = pages[kind]
+        fuels, by_region = parse_agrarii_network(html)
+        existed = any(alias in merged for alias in aliases)
+        if fuels and _put_fuels(merged, aliases, fuels, sources, f"{label} · області", not existed) and not existed:
+            notes.append(f"{'/'.join(aliases)} · {label}")
+        if by_region:
+            for alias in aliases:
+                bucket = regional.setdefault(alias, {})
+                for region, extra in by_region.items():
+                    current = bucket.setdefault(region, {})
+                    for key, price in extra.items():
+                        if key not in current:
+                            current[key] = price
 
     if "shina" in pages:
         label, html = pages["shina"]
         extra, stamp = parse_shinapro(html)
         src = f"{label} · {stamp}" if stamp else label
         for alias, fuels in extra.items():
+            if alias in from_official:
+                continue
             existed = alias in merged
             if _put_fuels(merged, (alias,), fuels, sources, src, not existed) and not existed:
                 notes.append(f"{alias} · {label}")
@@ -692,6 +803,8 @@ def fetch_alt_prices() -> tuple[
         label, html = pages["autoria"]
         extra = parse_autoria(html)
         for alias, fuels in extra.items():
+            if alias in from_official:
+                continue
             if alias in merged:
                 gap = {k: v for k, v in fuels.items() if k not in merged[alias]}
                 if gap:
