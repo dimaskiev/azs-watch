@@ -8,10 +8,12 @@ import json
 import os
 import re
 import socket
+import ssl
 import subprocess
 import threading
 import time
 import webbrowser
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -55,7 +57,11 @@ MINFIN_TM = "https://index.minfin.com.ua/ua/markets/fuel/tm/"
 MINFIN_DETAIL = "https://index.minfin.com.ua/ua/markets/fuel/detail/"
 OKKO_FUELS = "https://www.okko.ua/fuels"
 WOG_FUELS = "https://wog.ua/ua/fuels/"
+UPG_HOME = "https://upg.ua/"
+UPG_PRICES = "https://upg.ua/cini-na-palne/"
+PARALLEL_STATIONS = "https://backend.parallel.ua/api/station/get"
 SHINA_PRICES = "https://shinapro.in.ua/tsiny-na-palne/"
+AUTORIA_PRICES = "https://auto.ria.com/uk/toplivo/"
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -83,6 +89,21 @@ SHINA_ALIASES = {
     "WOG": ("WOG",),
     "UPG": ("UPG",),
     "KLO": ("KLO",),
+}
+AUTORIA_ALIASES = {
+    "ОККО": ("ОККО", "OKKO"),
+    "OKKO": ("ОККО", "OKKO"),
+    "WOG": ("WOG",),
+    "UPG": ("UPG",),
+    "KLO": ("KLO",),
+    "UKRNAFTA": ("UKRNAFTA",),
+    "Укрнафта": ("UKRNAFTA",),
+    "Marshal": ("Marshal",),
+    "Parallel": ("Parallel",),
+    "Автотранс": ("Автотранс",),
+    "Chipo": ("Chipo",),
+    "Martin": ("Martin",),
+    "MARTIN": ("Martin",),
 }
 
 _lock = threading.RLock()
@@ -134,9 +155,38 @@ def save_json(path: Path, payload: Any) -> None:
 
 
 def fetch(url: str, timeout: int = 20) -> str:
-    req = Request(url, headers={"User-Agent": UA, "Accept-Language": "uk,en;q=0.8"})
-    with urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+    req = Request(
+        url,
+        headers={
+            "User-Agent": UA,
+            "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
+            "Accept-Language": "uk,en;q=0.8",
+        },
+    )
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except URLError as exc:
+        if "CERTIFICATE" not in str(exc).upper() and "SSL" not in str(exc).upper():
+            raise
+        ctx = ssl._create_unverified_context()
+        with urlopen(req, timeout=timeout, context=ctx) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+
+
+def typical_price(values: list[float | None]) -> float | None:
+    nums = [round(float(v), 2) for v in values if v is not None]
+    if not nums:
+        return None
+    ranked = Counter(nums).most_common()
+    top_n = ranked[0][1]
+    modes = [price for price, n in ranked if n == top_n]
+    if top_n >= 2 or len(nums) < 3:
+        return modes[0] if len(modes) == 1 else round(sorted(modes)[len(modes) // 2], 2)
+    mid = sorted(nums)[len(nums) // 2]
+    tight = [v for v in nums if mid == 0 or abs(v - mid) / mid <= 0.08]
+    pool = sorted(tight or nums)
+    return pool[len(pool) // 2]
 
 
 def parse_number(text: str) -> float | None:
@@ -178,6 +228,18 @@ def parse_page_stamp(html: str) -> datetime | None:
                 return datetime(int(uk.group(3)), month, int(uk.group(1)), tzinfo=timezone.utc)
             except ValueError:
                 return None
+    dotted = re.search(r"(?:станом\s+на|оновлен[ао]\w*|на)\s+(\d{1,2})[./](\d{1,2})[./](\d{4})", html, re.I)
+    if dotted:
+        try:
+            return datetime(int(dotted.group(3)), int(dotted.group(2)), int(dotted.group(1)), tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    iso_day = re.search(r"(?:оновлен[ао]\w*|updated)\s+(\d{4})-(\d{2})-(\d{2})", html, re.I)
+    if iso_day:
+        try:
+            return datetime(int(iso_day.group(1)), int(iso_day.group(2)), int(iso_day.group(3)), tzinfo=timezone.utc)
+        except ValueError:
+            return None
     return None
 
 
@@ -272,6 +334,106 @@ def parse_okko_official(html: str) -> dict[str, float]:
     return fuels
 
 
+def parse_upg_official(html: str) -> dict[str, float]:
+    if not stamp_is_fresh(parse_page_stamp(html)):
+        return {}
+    fuels: dict[str, float] = {}
+    rules = (
+        (r"upg95[^0-9]{0,24}(\d+[.,]\d{2})", "a95plus"),
+        (r"upgdiesel[^0-9]{0,24}(\d+[.,]\d{2})", "dieselplus"),
+        (r"euro\s*diesel[^0-9]{0,24}(\d+[.,]\d{2})", "diesel"),
+        (r"а-95[^0-9+]{0,24}(\d+[.,]\d{2})", "a95"),
+        (r"газ[^0-9]{0,24}(\d+[.,]\d{2})", "lpg"),
+    )
+    blob = re.sub(r"\s+", " ", html)
+    for pattern, key in rules:
+        found = re.search(pattern, blob, re.I)
+        price = parse_number(found.group(1)) if found else None
+        if price is not None:
+            fuels[key] = price
+    return fuels
+
+
+def classify_station_fuel(title: str) -> str | None:
+    return classify_official_fuel(title, title)
+
+
+def match_region_name(title: str, known: list[str] | None = None) -> str:
+    raw = re.sub(r"\s+", " ", (title or "").replace("область", "обл.").strip())
+    if not raw:
+        return ""
+    if not raw.lower().endswith("обл.") and not raw.lower().endswith("обл"):
+        raw = f"{raw} обл."
+    head = raw.split()[0].lower()
+    for key in known or []:
+        if key.split()[0].lower() == head:
+            return key
+    return raw
+
+
+def parse_parallel_stations(raw: str) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+    try:
+        stations = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}, {}
+    if not isinstance(stations, list) or not stations:
+        return {}, {}
+    by_fuel: dict[str, list[float]] = {}
+    by_region: dict[str, dict[str, list[float]]] = {}
+    for station in stations:
+        if not isinstance(station, dict):
+            continue
+        region = match_region_name(str((station.get("region") or {}).get("title") or ""))
+        for item in station.get("fuels") or []:
+            if not isinstance(item, dict):
+                continue
+            key = classify_station_fuel(str(item.get("title") or ""))
+            price = parse_number(str(item.get("price") or ""))
+            if not key or price is None:
+                continue
+            by_fuel.setdefault(key, []).append(price)
+            if region:
+                by_region.setdefault(region, {}).setdefault(key, []).append(price)
+    national = {key: val for key, vals in by_fuel.items() if (val := typical_price(vals)) is not None}
+    regional = {
+        region: {key: val for key, vals in fuels.items() if (val := typical_price(vals)) is not None}
+        for region, fuels in by_region.items()
+    }
+    return national, regional
+
+
+def parse_autoria(html: str) -> dict[str, dict[str, float]]:
+    if not stamp_is_fresh(parse_page_stamp(html)):
+        return {}
+    table = re.search(r"Скільки коштує пальне.*?</table>", html, re.S | re.I)
+    chunk = table.group(0) if table else html
+    keys = ("a100", "a95plus", "a95", "a92", "diesel", "lpg")
+    out: dict[str, dict[str, float]] = {}
+    for row in re.finditer(r"<tr[^>]*>(.*?)</tr>", chunk, re.S | re.I):
+        name_m = re.search(r"<t[dh][^>]*>(.*?)</t[dh]>", row.group(1), re.S | re.I)
+        if not name_m:
+            continue
+        name = re.sub(r"<[^>]+>", "", name_m.group(1)).strip()
+        aliases = AUTORIA_ALIASES.get(name)
+        if not aliases:
+            continue
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", row.group(1), re.S | re.I)
+        fuels: dict[str, float] = {}
+        for key, cell in zip(keys, cells):
+            if key == "a100":
+                continue
+            raw = re.sub(r"<[^>]+>", "", cell)
+            if re.search(r"—|&mdash;|^[\s\-]*$", raw):
+                continue
+            price = parse_number(raw)
+            if price is not None:
+                fuels[key] = price
+        if fuels:
+            for alias in aliases:
+                out[alias] = dict(fuels)
+    return out
+
+
 def parse_shinapro(html: str) -> tuple[dict[str, dict[str, float]], str | None]:
     stamp = parse_page_stamp(html)
     if not stamp_is_fresh(stamp):
@@ -310,16 +472,47 @@ def parse_shinapro(html: str) -> tuple[dict[str, dict[str, float]], str | None]:
     return out, stamp_label
 
 
-def fetch_alt_prices() -> tuple[dict[str, dict[str, float]], dict[str, str], list[str]]:
-    """Official network sites first, then a same-day aggregator."""
+def _put_fuels(
+    target: dict[str, dict[str, float]],
+    aliases: tuple[str, ...],
+    fuels: dict[str, float],
+    sources: dict[str, str],
+    label: str,
+    replace: bool,
+) -> bool:
+    wrote = False
+    if not fuels:
+        return wrote
+    for alias in aliases:
+        current = target.setdefault(alias, {})
+        for key, price in fuels.items():
+            if replace or key not in current:
+                current[key] = price
+                sources[alias] = label
+                wrote = True
+    return wrote
+
+
+def fetch_alt_prices() -> tuple[
+    dict[str, dict[str, float]],
+    dict[str, dict[str, dict[str, float]]],
+    dict[str, str],
+    list[str],
+]:
+    """Official network feeds first, then same-day aggregators."""
     merged: dict[str, dict[str, float]] = {}
+    regional: dict[str, dict[str, dict[str, float]]] = {}
     sources: dict[str, str] = {}
     notes: list[str] = []
 
     jobs = [
         ("okko", OKKO_FUELS, "okko.ua"),
         ("wog", WOG_FUELS, "wog.ua"),
+        ("upg", UPG_HOME, "upg.ua"),
+        ("upg_prices", UPG_PRICES, "upg.ua"),
+        ("parallel", PARALLEL_STATIONS, "parallel.ua"),
         ("shina", SHINA_PRICES, "shinapro.in.ua"),
+        ("autoria", AUTORIA_PRICES, "auto.ria.com"),
     ]
 
     def load_one(job: tuple[str, str, str]) -> tuple[str, str, str, str]:
@@ -330,7 +523,7 @@ def fetch_alt_prices() -> tuple[dict[str, dict[str, float]], dict[str, str], lis
             return kind, label, "", str(exc)
 
     pages: dict[str, tuple[str, str]] = {}
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         for kind, label, html, err in pool.map(load_one, jobs):
             if html:
                 pages[kind] = (label, html)
@@ -340,6 +533,8 @@ def fetch_alt_prices() -> tuple[dict[str, dict[str, float]], dict[str, str], lis
     official = [
         ("okko", ("ОККО", "OKKO"), parse_okko_official),
         ("wog", ("WOG",), parse_wog_official),
+        ("upg", ("UPG",), parse_upg_official),
+        ("upg_prices", ("UPG",), parse_upg_official),
     ]
     for kind, aliases, parser in official:
         if kind not in pages:
@@ -348,57 +543,91 @@ def fetch_alt_prices() -> tuple[dict[str, dict[str, float]], dict[str, str], lis
         fuels = parser(html)
         if not fuels:
             continue
-        for alias in aliases:
-            merged[alias] = dict(fuels)
-            sources[alias] = f"{label} · сьогодні"
+        _put_fuels(merged, aliases, fuels, sources, f"{label} · сьогодні", True)
         notes.append(f"{'/'.join(aliases)} · {label}")
+
+    if "parallel" in pages:
+        label, raw = pages["parallel"]
+        fuels, by_region = parse_parallel_stations(raw)
+        if fuels:
+            _put_fuels(merged, ("Parallel",), fuels, sources, f"{label} · сьогодні", True)
+            regional["Parallel"] = by_region
+            notes.append(f"Parallel · {label}")
 
     if "shina" in pages:
         label, html = pages["shina"]
         extra, stamp = parse_shinapro(html)
+        src = f"{label} · {stamp}" if stamp else label
+        for alias, fuels in extra.items():
+            existed = alias in merged
+            if _put_fuels(merged, (alias,), fuels, sources, src, not existed) and not existed:
+                notes.append(f"{alias} · {label}")
+
+    if "autoria" in pages:
+        label, html = pages["autoria"]
+        extra = parse_autoria(html)
         for alias, fuels in extra.items():
             if alias in merged:
                 gap = {k: v for k, v in fuels.items() if k not in merged[alias]}
                 if gap:
                     merged[alias].update(gap)
             else:
-                merged[alias] = dict(fuels)
-                sources[alias] = f"{label} · {stamp}" if stamp else label
+                _put_fuels(merged, (alias,), fuels, sources, label, True)
                 notes.append(f"{alias} · {label}")
-    return merged, sources, notes
-
-
-def needs_alt_price(current: float | None, alt: float | None, regular: float | None) -> bool:
-    if alt is None:
-        return False
-    if current is None:
-        return True
-    if regular is not None and current == regular and alt != regular:
-        return True
-    return False
+    return merged, regional, sources, notes
 
 
 def overlay_alt_prices(
     national: dict[str, dict[str, float | None]],
     regional: dict[str, dict[str, dict[str, float | None]]],
     alt: dict[str, dict[str, float]],
+    alt_regional: dict[str, dict[str, dict[str, float]]],
     alt_sources: dict[str, str],
 ) -> dict[str, dict[str, str]]:
     used: dict[str, dict[str, str]] = {}
-    for name, prices in national.items():
-        extra = alt.get(name)
-        if not extra:
-            continue
-        for key in FUEL_KEYS:
-            regular = prices.get("diesel") if key == "dieselplus" else prices.get("a95") if key == "a95plus" else None
-            if needs_alt_price(prices.get(key), extra.get(key), regular):
-                prices[key] = extra[key]
-                used.setdefault(name, {})[key] = alt_sources.get(name, "сайт мережі")
 
-    for mapping in regional.values():
+    def apply(prices: dict[str, float | None], extra: dict[str, float], name: str) -> None:
+        for key, price in extra.items():
+            if key not in FUEL_KEYS or price is None:
+                continue
+            prices[key] = price
+            used.setdefault(name, {})[key] = alt_sources.get(name, "сайт мережі")
+
+    for name, extra in alt.items():
+        apply(national.setdefault(name, {k: None for k in FUEL_KEYS}), extra, name)
+
+    official_regions = {name: set() for name in alt_regional}
+    known_regions = list(regional.keys())
+    for name, by_region in alt_regional.items():
+        for region_title, extra in by_region.items():
+            region = match_region_name(region_title, known_regions)
+            mapping = regional.setdefault(region, {})
+            apply(mapping.setdefault(name, {k: None for k in FUEL_KEYS}), extra, name)
+            official_regions[name].add(region)
+            known_regions = list(regional.keys())
+
+    for region, mapping in regional.items():
         for name, prices in mapping.items():
-            nat = national.get(name, {})
+            if name in official_regions and region not in official_regions[name]:
+                extra = alt.get(name, {})
+                nat = national.get(name, {})
+                for key in ("dieselplus", "a95plus"):
+                    regular_key = "diesel" if key == "dieselplus" else "a95"
+                    if prices.get(key) is not None:
+                        continue
+                    regular = prices.get(regular_key)
+                    nat_branded = extra.get(key, nat.get(key))
+                    nat_regular = extra.get(regular_key, nat.get(regular_key))
+                    if regular is not None and nat_branded is not None and nat_regular is not None and nat_branded != nat_regular:
+                        prices[key] = round(regular + (nat_branded - nat_regular), 2)
+                continue
             extra = alt.get(name)
+            if extra and name not in official_regions:
+                for key in FUEL_KEYS:
+                    if extra.get(key) is not None and prices.get(key) is None:
+                        prices[key] = extra[key]
+                        used.setdefault(name, {})[key] = alt_sources.get(name, "сайт мережі")
+            nat = national.get(name, {})
             for key in ("dieselplus", "a95plus"):
                 regular_key = "diesel" if key == "dieselplus" else "a95"
                 current = prices.get(key)
@@ -416,12 +645,28 @@ def overlay_alt_prices(
                     prices[key] = round(regular + (nat_branded - nat_regular), 2)
                     if name in used and key in used[name]:
                         used.setdefault(name, {})[key] = used[name][key]
-                    elif extra and extra.get(key) is not None:
-                        used.setdefault(name, {})[key] = alt_sources.get(name, "сайт мережі")
-                elif extra and needs_alt_price(current, extra.get(key), regular):
-                    prices[key] = extra[key]
-                    used.setdefault(name, {})[key] = alt_sources.get(name, "сайт мережі")
     return used
+
+
+def fill_typical_national(
+    national: dict[str, dict[str, float | None]],
+    regional: dict[str, dict[str, dict[str, float | None]]],
+    locked: dict[str, dict[str, str]],
+) -> None:
+    """Replace war-skewed Minfin averages with the usual station price."""
+    for name, prices in national.items():
+        protected = locked.get(name, {})
+        for key in FUEL_KEYS:
+            if key in protected:
+                continue
+            vals = [
+                mapping[name].get(key)
+                for mapping in regional.values()
+                if name in mapping and mapping[name].get(key) is not None
+            ]
+            typical = typical_price(vals)
+            if typical is not None:
+                prices[key] = typical
 
 
 class ZebraParser(HTMLParser):
@@ -542,9 +787,10 @@ def scrape_minfin() -> dict[str, Any]:
     except (URLError, TimeoutError, OSError):
         pass
 
-    attach_branded_diesel(tm.national, detail.regional, load_json(PARTNERS, {"partners": []}))
-    alt, alt_sources, alt_notes = fetch_alt_prices()
-    price_sources = overlay_alt_prices(tm.national, detail.regional, alt, alt_sources)
+    alt, alt_regional, alt_sources, alt_notes = fetch_alt_prices()
+    price_sources = overlay_alt_prices(tm.national, detail.regional, alt, alt_regional, alt_sources)
+    fill_typical_national(tm.national, detail.regional, price_sources)
+    attach_branded_diesel(tm.national, detail.regional, load_json(PARTNERS, {"partners": []}), price_sources)
 
     date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", tm.caption or tm.page_updated or "")
     upd = re.search(r"останнє оновлення:\s*([\d.\s:]+)", tm_html, re.I)
@@ -754,13 +1000,20 @@ def attach_branded_diesel(
     national: dict[str, dict[str, float | None]],
     regional: dict[str, dict[str, dict[str, float | None]]],
     partners_doc: dict[str, Any],
+    locked: dict[str, dict[str, str]] | None = None,
 ) -> None:
+    locked = locked or {}
     jobs = []
     for partner in partners_doc.get("partners", []):
         slug = partner.get("slug")
         if not slug:
             continue
         for alias in partner.get("minfin", []):
+            prices = national.get(alias) or {}
+            if alias in locked and "dieselplus" in locked[alias]:
+                continue
+            if prices.get("dieselplus") not in (None, prices.get("diesel")):
+                continue
             jobs.append((alias, slug))
 
     extras: dict[str, dict[str, float]] = {}
@@ -768,18 +1021,24 @@ def attach_branded_diesel(
     def load_one(item: tuple[str, str]) -> tuple[str, dict[str, float]]:
         alias, slug = item
         try:
-            return alias, parse_brand_card(fetch(f"https://index.minfin.com.ua/ua/markets/fuel/tm/{slug}/"))
+            html = fetch(f"https://index.minfin.com.ua/ua/markets/fuel/tm/{slug}/")
+            if not stamp_is_fresh(parse_page_stamp(html)):
+                return alias, {}
+            return alias, parse_brand_card(html)
         except Exception:
             return alias, {}
 
     if jobs:
-        with ThreadPoolExecutor(max_workers=6) as pool:
+        with ThreadPoolExecutor(max_workers=4) as pool:
             for alias, fuels in pool.map(load_one, jobs):
                 extras[alias] = fuels
 
     for name, prices in national.items():
         branded = extras.get(name, {}).get("dieselplus")
-        prices["dieselplus"] = branded if branded is not None else prices.get("diesel")
+        if branded is not None and (name not in locked or "dieselplus" not in locked[name]):
+            prices["dieselplus"] = branded
+        elif prices.get("dieselplus") is None:
+            prices["dieselplus"] = prices.get("diesel")
 
     for mapping in regional.values():
         for name, prices in mapping.items():
