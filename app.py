@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import server as core
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 65_536
 
 
 def _api(payload, code: int = 200):
@@ -18,7 +19,7 @@ def _api(payload, code: int = 200):
 
 @app.get("/api/state")
 def api_state():
-    return _api(core.public_state(do_refresh=True))
+    return _api(core.public_state())
 
 
 @app.get("/api/refresh")

@@ -167,7 +167,7 @@ def fetch(url: str, timeout: int = 20) -> str:
         with urlopen(req, timeout=timeout) as resp:
             return resp.read().decode("utf-8", errors="replace")
     except URLError as exc:
-        if "CERTIFICATE" not in str(exc).upper() and "SSL" not in str(exc).upper():
+        if is_hosted() or ("CERTIFICATE" not in str(exc).upper() and "SSL" not in str(exc).upper()):
             raise
         ctx = ssl._create_unverified_context()
         with urlopen(req, timeout=timeout, context=ctx) as resp:
@@ -834,9 +834,12 @@ def parse_cut(value: Any) -> float | None:
     if value is None or value == "":
         return None
     try:
-        return round(float(value), 2)
+        cut = round(float(value), 2)
     except (TypeError, ValueError):
         return None
+    if cut < 0 or cut > 20:
+        return None
+    return cut
 
 
 def same_cut(a: Any, b: Any) -> bool:
@@ -1025,7 +1028,8 @@ def attach_branded_diesel(
             if not stamp_is_fresh(parse_page_stamp(html)):
                 return alias, {}
             return alias, parse_brand_card(html)
-        except Exception:
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            print(f"brand card {alias}: {exc}", flush=True)
             return alias, {}
 
     if jobs:
@@ -1167,7 +1171,8 @@ def refresh(force: bool = False) -> dict[str, Any]:
     try:
         scraped = scrape_minfin()
     except Exception as exc:  # network / parse — keep last cache
-        error = str(exc)
+        print(f"price scrape failed: {exc}", flush=True)
+        error = None if is_hosted() else str(exc)
     state = build_state(scraped, partners_doc, error)
     schedule_next()
     attach_schedule(state)
@@ -1200,8 +1205,6 @@ def current_state() -> dict[str, Any]:
 
 
 def public_state(do_refresh: bool = False, rebuild: bool = False) -> dict[str, Any]:
-    if is_hosted() and not rebuild:
-        do_refresh = True
     if do_refresh:
         payload = refresh(force=True)
     elif rebuild:
@@ -1229,7 +1232,8 @@ def monitor_loop() -> None:
             continue
         try:
             refresh()
-        except Exception:
+        except Exception as exc:
+            print(f"monitor refresh failed: {exc}", flush=True)
             schedule_next()
 
 
@@ -1270,6 +1274,9 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?", 1)[0]
         length = int(self.headers.get("Content-Length") or "0")
+        if length > 65_536:
+            self._json({"ok": False, "error": "Завеликий запит"}, 413)
+            return
         raw = self.rfile.read(length) if length else b"{}"
         try:
             body = json.loads(raw.decode("utf-8") or "{}")

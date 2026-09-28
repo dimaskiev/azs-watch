@@ -1,0 +1,15 @@
+---
+description: Product constraints for AZS WATCH prices, discounts, UI, and prod.
+alwaysApply: true
+---
+
+# AZS WATCH product
+
+- UI language: Ukrainian. Do not switch copy to English.
+- Ten Plusy networks only: WOG, ОККО, UKRNAFTA, UPG, Marshal, Parallel, Автотранс, KLO, Chipo, Martin.
+- Official branded names only for the **current** fuel (Mustang / Pulls / Energy / upg95 / EVOX / Perfekt / Ventus). Do not invent house brands.
+- Prices: official network feed first, then same-day aggregator, then typical regional Minfin — never a war-skewed national average as the default «Україна» price. Do not invent a number when the source has none (Martin).
+- Army+ cuts: local catalog + `discounts.local.json` / bundled overrides. **Do not** pull Plusy page “до X” as per-grade cuts. **Do not** wipe `discounts.local.json`.
+- Hosted (`VERCEL` / `AZS_HOSTED`): hide the discount editor; no `/api/discounts` writes. Local edits reach prod via git + `discounts_bundled.py`.
+- Do not put source sites, dates, or “сьогодні” back into table rows or the footer.
+- Commit only the files that belong to the change. Skip OneDrive/CRLF ghost diffs.

@@ -10,6 +10,14 @@ const LABELS = {
 
 const $ = (id) => document.getElementById(id);
 
+function esc(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 const POLL_MS = 30 * 1000;
 
 const EDIT_KEYS = ["a92", "a95", "a95plus", "diesel", "dieselplus", "lpg"];
@@ -169,7 +177,7 @@ function renderKpis(list) {
 }
 
 function kpi(k, v, t) {
-  return `<article class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="t">${t}</div></article>`;
+  return `<article class="kpi"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="t">${esc(t)}</div></article>`;
 }
 
 function isPhone() {
@@ -211,16 +219,16 @@ function logoMark(item, extraClass) {
   const src = logoSrc(item);
   const cls = extraClass ? ` ${extraClass}` : "";
   if (!src) {
-    const name = String(item.name || "?").slice(0, 3).toUpperCase();
+    const name = esc(String(item.name || "?").slice(0, 3).toUpperCase());
     return `<span class="logo${cls}" aria-hidden="true"><span>${name}</span></span>`;
   }
-  return `<span class="logo img${cls}" aria-hidden="true"><img src="${src}" alt=""></span>`;
+  return `<span class="logo img${cls}" aria-hidden="true"><img src="${esc(src)}" alt=""></span>`;
 }
 
 function netCell(item, best) {
   const brand = brandLine(item);
   const tag = best ? `<span class="opt-tag">оптимум</span>` : "";
-  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${item.name}${tag}</div>${brand ? `<small class="net-brand">${brand}</small>` : ""}</div></div>`;
+  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${esc(item.name)}${tag}</div>${brand ? `<small class="net-brand">${esc(brand)}</small>` : ""}</div></div>`;
 }
 
 function renderGrid(list) {
@@ -254,7 +262,7 @@ function renderGrid(list) {
         const open = state.openCard === p.id;
         return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""}">
           ${best ? `<p class="m-best-tag">НАЙДЕШЕВША</p>` : ""}
-          <button class="m-logo" type="button" data-open="${p.id}" aria-expanded="${open}" aria-label="${p.name}, ${open ? "сховати деталі" : "показати деталі"}">
+          <button class="m-logo" type="button" data-open="${esc(p.id)}" aria-expanded="${open}" aria-label="${esc(p.name)}, ${open ? "сховати деталі" : "показати деталі"}">
             ${logoMark(p)}
             <i class="m-logo-plus">${open ? "−" : "+"}</i>
           </button>
@@ -278,8 +286,8 @@ function renderGrid(list) {
           <div class="m-detail"${open ? "" : " hidden"}>
             <div class="m-head">
               <span class="m-rank">${String(i + 1).padStart(2, "0")}</span>
-              <h3>${p.name}</h3>
-              ${brandLine(p) ? `<p class="net-brand">${brandLine(p)}</p>` : ""}
+              <h3>${esc(p.name)}</h3>
+              ${brandLine(p) ? `<p class="net-brand">${esc(brandLine(p))}</p>` : ""}
             </div>
             <div class="m-prices">
               <div><span>Стеля</span><b>${money(p.retail)}</b></div>
@@ -288,7 +296,7 @@ function renderGrid(list) {
             </div>
             <p class="m-fill">${liters} л = <b>${p.fill != null ? money(p.fill) : "—"}</b> грн</p>
             <p class="m-save">економія ${p.saved != null ? money(p.saved) : "—"} грн</p>
-            <p class="m-note">${[p.limit, ...(p.extras || [])].filter(Boolean).join(" · ")}</p>
+            <p class="m-note">${esc([p.limit, ...(p.extras || [])].filter(Boolean).join(" · "))}</p>
           </div>
         </article>`;
       })
@@ -307,7 +315,7 @@ function renderGrid(list) {
         <td class="num real">${p.real != null ? money(p.real) : "—"}</td>
         <td class="num fill">${p.fill != null ? money(p.fill) : "—"}</td>
         <td class="num">${p.saved != null ? "−" + money(p.saved) : "—"}</td>
-        <td class="note">${[p.limit, ...(p.extras || [])].filter(Boolean).join(" · ")}</td>
+        <td class="note">${esc([p.limit, ...(p.extras || [])].filter(Boolean).join(" · "))}</td>
       </tr>`;
     })
     .join("");
@@ -353,7 +361,7 @@ function fillRegions() {
   const sel = $("region");
   const current = state.settings.region;
   sel.innerHTML = (state.data.regions || ["Україна"])
-    .map((r) => `<option value="${r}">${r}</option>`)
+    .map((r) => `<option value="${esc(r)}">${esc(r)}</option>`)
     .join("");
   sel.value = state.data.regions.includes(current) ? current : "Україна";
   state.settings.region = sel.value;
@@ -445,7 +453,7 @@ function renderEditor() {
           const cur = row.current[k];
           const cat = row.catalog[k];
           const dirty = String(cur ?? "") !== String(cat ?? "");
-          return `<td class="num"><input class="cut${dirty ? " dirty" : ""}" data-id="${row.id}" data-key="${k}" type="number" min="0" step="0.1" placeholder="—" value="${cur == null ? "" : cur}" /></td>`;
+          return `<td class="num"><input class="cut${dirty ? " dirty" : ""}" data-id="${esc(row.id)}" data-key="${esc(k)}" type="number" min="0" step="0.1" placeholder="—" value="${cur == null ? "" : esc(cur)}" /></td>`;
         })
         .join("");
       const catText = keys
@@ -454,7 +462,7 @@ function renderEditor() {
       return `<tr>
         <td>${netCell(row)}</td>
         ${cells}
-        <td class="note">${catText}</td>
+        <td class="note">${esc(catText)}</td>
       </tr>`;
     })
     .join("");

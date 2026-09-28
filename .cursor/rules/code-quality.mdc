@@ -1,0 +1,40 @@
+---
+description: Architecture and code quality bar. On «перевір код» / review — find and fix.
+alwaysApply: true
+---
+
+# Code quality (write + review)
+
+When the user says **«перевір код»**, «перевірка коду», «рев'ю», «ревью», «аудит коду», «review code», or similar: follow `.cursor/skills/code-review/SKILL.md`. **Find and fix.** Do not only report.
+
+When writing any new or changed code, apply this bar plus `azs-watch.mdc` and `AGENTS.md`. Product rules win over generic style.
+
+## Layers
+
+- HTTP/UI (`Handler`, `app.py`, `web/`): validation, response, render. No scrape URLs or HTML parsers here.
+- Price/discount logic stays in `server.py` helpers. Do not parse raw Flask/HTTP request objects inside scrape functions.
+- Fetch/parse of Minfin and network sites: IO + parse only. Do **not** add a client/repository layer for one implementation.
+
+## SOLID, coupling, patterns
+
+- One reason to change per function.
+- Abstraction only when a **second** implementation exists.
+- Do not add Observer, DI containers, or “enterprise” folders.
+
+## Performance
+
+- Scrape in parallel where already patterned. Do not add sequential per-station HTTP on the request path.
+- Hosted `/api/state` uses a fresh cache; full scrape only when stale or `/api/refresh`.
+- Do not load unbounded HTML into extra in-memory copies of the same page.
+
+## Reliability / security
+
+- No empty `except`. Expected errors → keep last cache / HTTP message; unexpected → log and fail.
+- Validate discount edits (known partner ids, fuel keys, numeric range). Never scrape Plusy “до X” as per-grade cuts.
+- On hosted, never disable TLS verification. Never commit `.env` or wipe `data/discounts.local.json`.
+- Logs: no tokens, no raw `.env`. Hosted API errors are generic, not stack traces.
+
+## Maintainability
+
+- Names describe purpose. If a paragraph of comments is needed, refactor.
+- **Boy scout only in files already in the task diff.** Minimal diff wins over a cleaner-looking rewrite.
