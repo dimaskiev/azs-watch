@@ -648,6 +648,6 @@ setInterval(() => {
   const next = state.data.next_refresh_at ? new Date(state.data.next_refresh_at).getTime() : 0;
   if (next && Date.now() >= next && !state.busy && Date.now() - dueFetchAt > 15000) {
     dueFetchAt = Date.now();
-    load("/api/state").catch(() => {});
+    load("/api/refresh").catch(() => {});
   }
 }, 1000);

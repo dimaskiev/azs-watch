@@ -60,6 +60,8 @@ WOG_FUELS = "https://wog.ua/ua/fuels/"
 UPG_HOME = "https://upg.ua/"
 UPG_PRICES = "https://upg.ua/cini-na-palne/"
 PARALLEL_STATIONS = "https://backend.parallel.ua/api/station/get"
+AUTOTRANS_PRICES = "https://autotrans.ua/informaciya-i-ceny"
+AGRARII_AZS = "https://agrarii-razom.com.ua/fuel/azs/{slug}"
 SHINA_PRICES = "https://shinapro.in.ua/tsiny-na-palne/"
 AUTORIA_PRICES = "https://auto.ria.com/uk/toplivo/"
 UA = (
@@ -104,6 +106,20 @@ AUTORIA_ALIASES = {
     "Chipo": ("Chipo",),
     "Martin": ("Martin",),
     "MARTIN": ("Martin",),
+}
+AGRARII_SLUGS = {
+    "ukrnafta": ("UKRNAFTA",),
+    "marshal": ("Marshal",),
+    "avtotrans": ("Автотранс",),
+    "chipo": ("Chipo",),
+}
+AGRARII_LABELS = {
+    "a-95+": "a95plus",
+    "a-95": "a95",
+    "a-92": "a92",
+    "дп": "diesel",
+    "газ": "lpg",
+    "газ (lpg)": "lpg",
 }
 
 _lock = threading.RLock()
@@ -402,6 +418,67 @@ def parse_parallel_stations(raw: str) -> tuple[dict[str, float], dict[str, dict[
     return national, regional
 
 
+def parse_autotrans_official(html: str) -> dict[str, float]:
+    dated = re.search(r'class="fuel__date">\s*(\d{2})\.(\d{2})\.(\d{4})', html, re.I)
+    if not dated:
+        return {}
+    try:
+        stamp = datetime(int(dated.group(3)), int(dated.group(2)), int(dated.group(1)), tzinfo=timezone.utc)
+    except ValueError:
+        return {}
+    if not stamp_is_fresh(stamp):
+        return {}
+    fuels: dict[str, float] = {}
+    for item in re.finditer(r'class="fuelList__item">(.*?)</li>', html, re.S | re.I):
+        label = re.sub(r"<[^>]+>", " ", item.group(1))
+        label = re.sub(r"\s+", " ", label).strip().lower()
+        price_m = re.search(r"<b>\s*(\d+[.,]\d{2})\s*</b>", item.group(1), re.I)
+        price = parse_number(price_m.group(1)) if price_m else None
+        if price is None:
+            continue
+        if "а-98" in label or "а98" in label:
+            fuels["a95plus"] = price
+        elif re.search(r"\b95\b", label):
+            fuels["a95"] = price
+        elif "дп" in label:
+            fuels["diesel"] = price
+        elif "газ" in label:
+            fuels["lpg"] = price
+    if fuels.get("diesel") is not None:
+        fuels["dieselplus"] = fuels["diesel"]
+    return fuels
+
+
+def _agrarii_fuel_key(label: str) -> str | None:
+    raw = re.sub(r"\s+", " ", (label or "").lower()).strip()
+    if raw in AGRARII_LABELS:
+        return AGRARII_LABELS[raw]
+    if raw.startswith("газ"):
+        return "lpg"
+    if raw.startswith("дп"):
+        return "diesel"
+    return None
+
+
+def parse_agrarii(html: str) -> dict[str, float]:
+    if not stamp_is_fresh(parse_page_stamp(html)):
+        return {}
+    table = re.search(r"<table[^>]*>(.*?)</table>", html, re.S | re.I)
+    if not table:
+        return {}
+    fuels: dict[str, float] = {}
+    for row in re.finditer(r"<tr>(.*?)</tr>", table.group(1), re.S | re.I):
+        cells = [re.sub(r"<[^>]+>", " ", cell) for cell in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row.group(1), re.S | re.I)]
+        cells = [re.sub(r"\s+", " ", cell).strip() for cell in cells]
+        if len(cells) < 5:
+            continue
+        key = _agrarii_fuel_key(cells[0])
+        price = parse_number(cells[4])
+        if key and price is not None:
+            fuels[key] = price
+    return fuels
+
+
 def parse_autoria(html: str) -> dict[str, dict[str, float]]:
     if not stamp_is_fresh(parse_page_stamp(html)):
         return {}
@@ -511,8 +588,13 @@ def fetch_alt_prices() -> tuple[
         ("upg", UPG_HOME, "upg.ua"),
         ("upg_prices", UPG_PRICES, "upg.ua"),
         ("parallel", PARALLEL_STATIONS, "parallel.ua"),
+        ("autotrans", AUTOTRANS_PRICES, "autotrans.ua"),
         ("shina", SHINA_PRICES, "shinapro.in.ua"),
         ("autoria", AUTORIA_PRICES, "auto.ria.com"),
+        *[
+            (f"agrarii:{slug}", AGRARII_AZS.format(slug=slug), "agrarii-razom.com.ua")
+            for slug in AGRARII_SLUGS
+        ],
     ]
 
     def load_one(job: tuple[str, str, str]) -> tuple[str, str, str, str]:
@@ -523,7 +605,7 @@ def fetch_alt_prices() -> tuple[
             return kind, label, "", str(exc)
 
     pages: dict[str, tuple[str, str]] = {}
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         for kind, label, html, err in pool.map(load_one, jobs):
             if html:
                 pages[kind] = (label, html)
@@ -553,6 +635,25 @@ def fetch_alt_prices() -> tuple[
             _put_fuels(merged, ("Parallel",), fuels, sources, f"{label} · сьогодні", True)
             regional["Parallel"] = by_region
             notes.append(f"Parallel · {label}")
+
+    if "autotrans" in pages:
+        label, html = pages["autotrans"]
+        fuels = parse_autotrans_official(html)
+        if fuels:
+            _put_fuels(merged, ("Автотранс",), fuels, sources, f"{label} · сьогодні", True)
+            notes.append(f"Автотранс · {label}")
+
+    for slug, aliases in AGRARII_SLUGS.items():
+        kind = f"agrarii:{slug}"
+        if kind not in pages:
+            continue
+        label, html = pages[kind]
+        fuels = parse_agrarii(html)
+        if not fuels:
+            continue
+        existed = any(alias in merged for alias in aliases)
+        if _put_fuels(merged, aliases, fuels, sources, f"{label} · медіана", not existed) and not existed:
+            notes.append(f"{'/'.join(aliases)} · {label}")
 
     if "shina" in pages:
         label, html = pages["shina"]
@@ -791,6 +892,7 @@ def scrape_minfin() -> dict[str, Any]:
     price_sources = overlay_alt_prices(tm.national, detail.regional, alt, alt_regional, alt_sources)
     fill_typical_national(tm.national, detail.regional, price_sources)
     attach_branded_diesel(tm.national, detail.regional, load_json(PARTNERS, {"partners": []}), price_sources)
+    apply_ukrnafta_energy_diesel(tm.national, detail.regional, price_sources)
 
     date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", tm.caption or tm.page_updated or "")
     upd = re.search(r"останнє оновлення:\s*([\d.\s:]+)", tm_html, re.I)
@@ -1060,6 +1162,37 @@ def attach_branded_diesel(
                 prices["dieselplus"] = prices.get("diesel")
 
 
+def apply_ukrnafta_energy_diesel(
+    national: dict[str, dict[str, float | None]],
+    regional: dict[str, dict[str, dict[str, float | None]]],
+    locked: dict[str, dict[str, str]],
+) -> None:
+    """Minfin TM lists only euro diesel; A-95 daily tables keep Energy diesel +2 грн."""
+    name = "UKRNAFTA"
+    prices = national.get(name)
+    if not prices:
+        return
+    if "dieselplus" in locked.get(name, {}):
+        return
+    diesel = prices.get("diesel")
+    plus = prices.get("dieselplus")
+    if diesel is None or plus not in (None, diesel):
+        return
+    branded = round(float(diesel) + 2.0, 2)
+    prices["dieselplus"] = branded
+    locked.setdefault(name, {})["dieselplus"] = "A-95 · ДП Energy"
+    for mapping in regional.values():
+        row = mapping.get(name)
+        if not row:
+            continue
+        local_diesel = row.get("diesel")
+        if local_diesel is None:
+            continue
+        if row.get("dieselplus") not in (None, local_diesel):
+            continue
+        row["dieselplus"] = round(float(local_diesel) + 2.0, 2)
+
+
 def partner_prices(partner: dict[str, Any], price_map: dict[str, dict[str, float | None]]) -> dict[str, float | None]:
     empty = {"a95plus": None, "a95": None, "a92": None, "diesel": None, "dieselplus": None, "lpg": None}
     for alias in partner.get("minfin", []):
@@ -1173,6 +1306,8 @@ def refresh(force: bool = False) -> dict[str, Any]:
     except Exception as exc:  # network / parse — keep last cache
         print(f"price scrape failed: {exc}", flush=True)
         error = None if is_hosted() else str(exc)
+        if force:
+            scraped = None
     state = build_state(scraped, partners_doc, error)
     schedule_next()
     attach_schedule(state)
@@ -1199,7 +1334,8 @@ def cache_age_sec(payload: dict[str, Any] | None) -> float | None:
 def current_state() -> dict[str, Any]:
     cache = load_json(CACHE, {})
     age = cache_age_sec(cache)
-    if cache.get("national") and age is not None and age < REFRESH_SEC:
+    max_age = 15 * 60 if is_hosted() else REFRESH_SEC
+    if cache.get("national") and age is not None and age < max_age:
         return rebuild_prices()
     return refresh()
 
