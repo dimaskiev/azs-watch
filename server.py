@@ -163,6 +163,8 @@ def fetch(url: str, timeout: int = 20) -> str:
             "User-Agent": UA,
             "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
             "Accept-Language": "uk,en;q=0.8",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
         },
     )
     try:
@@ -1406,7 +1408,9 @@ class Handler(SimpleHTTPRequestHandler):
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
@@ -1436,6 +1440,9 @@ class Handler(SimpleHTTPRequestHandler):
             self._json({"ok": False, "error": "Завеликий запит"}, 413)
             return
         raw = self.rfile.read(length) if length else b"{}"
+        if path == "/api/refresh":
+            self._json(public_state(do_refresh=True))
+            return
         try:
             body = json.loads(raw.decode("utf-8") or "{}")
         except json.JSONDecodeError:

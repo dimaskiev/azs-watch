@@ -13,7 +13,9 @@ app.config["MAX_CONTENT_LENGTH"] = 65_536
 def _api(payload, code: int = 200):
     resp = jsonify(payload)
     resp.status_code = code
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 
@@ -23,6 +25,7 @@ def api_state():
 
 
 @app.get("/api/refresh")
+@app.post("/api/refresh")
 def api_refresh():
     return _api(core.public_state(do_refresh=True))
 

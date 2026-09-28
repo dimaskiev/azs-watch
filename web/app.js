@@ -548,8 +548,14 @@ function paint() {
   renderGrid(list);
 }
 
-async function load(path) {
-  const res = await fetch(path, { cache: "no-store" });
+async function load(path, options = {}) {
+  const sep = path.includes("?") ? "&" : "?";
+  const url = options.fresh ? `${path}${sep}t=${Date.now()}` : path;
+  const res = await fetch(url, {
+    method: options.method || "GET",
+    cache: "no-store",
+    headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
+  });
   if (!res.ok) throw new Error("HTTP " + res.status);
   state.data = await res.json();
   applyHostedChrome();
@@ -563,7 +569,10 @@ async function manualRefresh() {
   $("refresh").disabled = true;
   $("refresh").textContent = "СИНХРОНІЗАЦІЯ…";
   try {
-    await load("/api/refresh");
+    await load("/api/refresh", { method: "POST", fresh: true });
+    if (state.data && state.data.from_cache) {
+      $("sync-last").textContent = "джерела не відповіли, лишились попередні ціни";
+    }
   } catch (err) {
     $("sync-last").textContent = "оновлення не вдалося: " + err.message;
   } finally {
@@ -629,16 +638,20 @@ function pricesUrl() {
   return hosted() ? "/api/refresh" : "/api/state";
 }
 
+function livePricesOpts() {
+  return hosted() ? { method: "POST", fresh: true } : {};
+}
+
 bind();
 applyHostedChrome();
 applyControls();
-load(pricesUrl()).catch((err) => {
+load(pricesUrl(), livePricesOpts()).catch((err) => {
   $("sync-last").textContent = "канал недоступний: " + err.message;
 });
 
 setInterval(() => {
   if (state.busy || state.tab === "discounts") return;
-  load(pricesUrl()).catch(() => {});
+  load(pricesUrl(), livePricesOpts()).catch(() => {});
 }, hosted() ? 5 * 60 * 1000 : POLL_MS);
 
 let dueFetchAt = 0;
@@ -648,6 +661,6 @@ setInterval(() => {
   const next = state.data.next_refresh_at ? new Date(state.data.next_refresh_at).getTime() : 0;
   if (next && Date.now() >= next && !state.busy && Date.now() - dueFetchAt > 15000) {
     dueFetchAt = Date.now();
-    load("/api/refresh").catch(() => {});
+    load("/api/refresh", { method: "POST", fresh: true }).catch(() => {});
   }
 }, 1000);
