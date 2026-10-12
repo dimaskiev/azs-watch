@@ -397,8 +397,7 @@ table.sheet .pay-mark {
 }
 table.sheet .bank-mark img,
 table.sheet .pay-mark img,
-.bank-pick img,
-.pay-pick img {
+.bank-pick img {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -682,7 +681,12 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   font-size: 14px;
 }
 .bank-pick { justify-content: center; }
-.pay-pick { min-height: 44px; padding: 6px 8px; }
+.pay-pick {
+  width: 52px;
+  min-height: 52px;
+  padding: 6px;
+  justify-content: center;
+}
 .bank-pick.on, .pay-pick.on {
   border-color: var(--sage);
   background: rgba(143, 163, 90, .14);
@@ -698,11 +702,15 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   background: #fff;
   padding: 3px;
 }
-.pay-logo { width: 42px; height: 28px; flex-basis: 42px; }
+.pay-logo {
+  width: 36px;
+  height: 24px;
+  flex: 0 0 36px;
+}
 .pay-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-bottom: 12px;
 }
 .card-cuts {

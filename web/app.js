@@ -761,9 +761,8 @@ function renderCardDeals() {
       const bankBtns = banks.map((bank) => `<button class="bank-pick${bank.id === offer.bank ? " on" : ""}" type="button" data-card-bank="${esc(partner.id)}" data-bank="${esc(bank.id)}" title="${esc(bank.name)}" aria-label="${esc(bank.name)}">
         <img class="bank-logo" src="${esc(bankLogo(bank.id))}" alt="">
       </button>`).join("");
-      const payBtns = cards.map((card) => `<button class="pay-pick${card.id === offer.card ? " on" : ""}" type="button" data-card-pay="${esc(partner.id)}" data-card="${esc(card.id)}">
+      const payBtns = cards.map((card) => `<button class="pay-pick${card.id === offer.card ? " on" : ""}" type="button" data-card-pay="${esc(partner.id)}" data-card="${esc(card.id)}" title="${esc(card.name)}" aria-label="${esc(card.name)}">
         <img class="pay-logo" src="${esc(payLogo(card.id))}" alt="">
-        <span>${esc(card.name)}</span>
       </button>`).join("");
       const choices = partners.filter((item) => item.id === partner.id || !offers[item.id]);
       const netOpts = choices.map((item) => `<option value="${esc(item.id)}"${item.id === partner.id ? " selected" : ""}>${esc(item.name)}</option>`).join("");
