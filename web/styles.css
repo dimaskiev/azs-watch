@@ -595,7 +595,7 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
 }
 .bank-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
   gap: 6px;
   margin: 8px 0 12px;
 }
@@ -605,8 +605,8 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
-  padding: 6px 8px;
+  min-height: 52px;
+  padding: 6px;
   background: #12160f;
   color: var(--tan);
   border: 1px solid var(--line);
@@ -614,15 +614,17 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   font-family: "Barlow Condensed", sans-serif;
   font-size: 14px;
 }
+.bank-pick { justify-content: center; }
+.pay-pick { min-height: 44px; padding: 6px 8px; }
 .bank-pick.on, .pay-pick.on {
   border-color: var(--sage);
   background: rgba(143, 163, 90, .14);
   color: var(--ink);
 }
 .bank-logo, .pay-logo, .mini-logo {
-  width: 48px;
-  height: 28px;
-  flex: 0 0 48px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   display: block;
   object-fit: contain;
   border-radius: 6px;
@@ -713,7 +715,7 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   #view-discounts .board { padding-left: 0; padding-right: 0; }
   .edit-grid { grid-template-columns: 1fr 1fr; }
   .card-cuts { grid-template-columns: 1fr 1fr; }
-  .bank-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .bank-grid { grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); }
   .m-card-row { grid-column: 1 / -1; }
 }
 

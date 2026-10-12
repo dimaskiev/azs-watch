@@ -32,16 +32,9 @@
       "logo": "ukreximbank.png"
     },
     {
-      "id": "ukrgasbank",
-      "name": "Укргазбанк",
-      "short": "УГБ",
-      "color": "#e30613",
-      "logo": "ukrgasbank.png"
-    },
-    {
       "id": "raiffeisen",
-      "name": "Райффайзен Банк",
-      "short": "RZF",
+      "name": "Аваль",
+      "short": "АВЛ",
       "color": "#111111",
       "logo": "raiffeisen.svg"
     },
@@ -49,14 +42,14 @@
       "id": "pumb",
       "name": "ПУМБ",
       "short": "ПУМБ",
-      "color": "#00a0e3",
+      "color": "#e30613",
       "logo": "pumb.png"
     },
     {
       "id": "ukrsibbank",
       "name": "Укрсиббанк",
       "short": "УСБ",
-      "color": "#e30613",
+      "color": "#008053",
       "logo": "ukrsibbank.svg"
     },
     {
@@ -70,21 +63,14 @@
       "id": "otp",
       "name": "ОТП Банк",
       "short": "ОТП",
-      "color": "#00a3e0",
-      "logo": "otp.png"
-    },
-    {
-      "id": "monobank",
-      "name": "monobank",
-      "short": "mono",
-      "color": "#111111",
-      "logo": "monobank.svg"
+      "color": "#00a651",
+      "logo": "otp.svg"
     },
     {
       "id": "sense",
       "name": "Сенс Банк",
       "short": "СЕНС",
-      "color": "#1a1a1a",
+      "color": "#2722FF",
       "logo": "sense.svg"
     },
     {
@@ -95,95 +81,18 @@
       "logo": "pivdenny.png"
     },
     {
-      "id": "kredobank",
-      "name": "Кредобанк",
-      "short": "КРЕ",
-      "color": "#c8102e",
-      "logo": "kredobank.svg"
-    },
-    {
-      "id": "tascombank",
-      "name": "Таскомбанк",
-      "short": "ТАС",
-      "color": "#1b4f9c",
-      "logo": "tascombank.png"
-    },
-    {
-      "id": "creditdnepr",
-      "name": "Кредит Дніпро",
-      "short": "КД",
-      "color": "#c8102e",
-      "logo": "creditdnepr.svg"
-    },
-    {
       "id": "abank",
       "name": "А-Банк",
       "short": "А",
-      "color": "#e30613",
+      "color": "#22c55e",
       "logo": "abank.png"
-    },
-    {
-      "id": "procredit",
-      "name": "Прокредит Банк",
-      "short": "ПК",
-      "color": "#e87722",
-      "logo": "procredit.png"
     },
     {
       "id": "ideabank",
       "name": "Ідея Банк",
       "short": "ІДЕЯ",
-      "color": "#6c1d5f",
+      "color": "#1d5980",
       "logo": "ideabank.svg"
-    },
-    {
-      "id": "vostok",
-      "name": "Банк Восток",
-      "short": "ВСК",
-      "color": "#00a0dc",
-      "logo": "vostok.svg"
-    },
-    {
-      "id": "mtb",
-      "name": "МТБ Банк",
-      "short": "МТБ",
-      "color": "#0033a0",
-      "logo": "mtb.png"
-    },
-    {
-      "id": "lviv",
-      "name": "Банк Львів",
-      "short": "ЛВВ",
-      "color": "#1e4d2b",
-      "logo": "lviv.svg"
-    },
-    {
-      "id": "globus",
-      "name": "Глобус",
-      "short": "ГЛБ",
-      "color": "#0b6e4f",
-      "logo": "globus.png"
-    },
-    {
-      "id": "piraeus",
-      "name": "Піреус Банк",
-      "short": "ПРС",
-      "color": "#004b87",
-      "logo": "piraeus.png"
-    },
-    {
-      "id": "pravex",
-      "name": "Правекс Банк",
-      "short": "ПРВ",
-      "color": "#c8102e",
-      "logo": "pravex.svg"
-    },
-    {
-      "id": "accordbank",
-      "name": "Акордбанк",
-      "short": "АКР",
-      "color": "#1a1a2e",
-      "logo": "accordbank.svg"
     }
   ]
 }

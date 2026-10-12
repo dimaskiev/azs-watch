@@ -712,9 +712,8 @@ function renderCardDeals() {
         return `<label class="opt"><span>${esc(EDIT_LABELS[key])}</span>
           <input class="cut" data-card-cut="${esc(partner.id)}" data-key="${esc(key)}" type="number" min="0" max="20" step="0.1" placeholder="—" value="${esc(cur)}" /></label>`;
       }).join("");
-      const bankBtns = banks.map((bank) => `<button class="bank-pick${bank.id === offer.bank ? " on" : ""}" type="button" data-card-bank="${esc(partner.id)}" data-bank="${esc(bank.id)}">
+      const bankBtns = banks.map((bank) => `<button class="bank-pick${bank.id === offer.bank ? " on" : ""}" type="button" data-card-bank="${esc(partner.id)}" data-bank="${esc(bank.id)}" title="${esc(bank.name)}" aria-label="${esc(bank.name)}">
         <img class="bank-logo" src="${esc(bankLogo(bank.id))}" alt="">
-        <span>${esc(bank.name)}</span>
       </button>`).join("");
       const payBtns = cards.map((card) => `<button class="pay-pick${card.id === offer.card ? " on" : ""}" type="button" data-card-pay="${esc(partner.id)}" data-card="${esc(card.id)}">
         <img class="pay-logo" src="${esc(payLogo(card.id))}" alt="">
