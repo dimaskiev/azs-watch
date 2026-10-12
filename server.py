@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 DATA = ROOT / "data"
 PARTNERS = DATA / "partners.json"
+BANKS = DATA / "banks.json"
+CARD_TYPES = ("visa", "mastercard")
 
 
 def is_hosted() -> bool:
@@ -1057,16 +1059,84 @@ def _overrides_map(raw: Any) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
-def load_overrides() -> dict[str, Any]:
+def _card_offers_map(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict) and isinstance(raw.get("card_offers"), dict):
+        return raw["card_offers"]
+    return {}
+
+
+def load_discount_doc() -> dict[str, Any]:
     for path in (DATA / "discounts.local.json", OVERRIDES):
-        found = _overrides_map(load_json(path, {}))
-        if found:
-            return found
+        raw = load_json(path, {})
+        if isinstance(raw, dict) and (raw.get("overrides") or raw.get("card_offers") or "updated" in raw):
+            return {
+                "updated": raw.get("updated"),
+                "overrides": _overrides_map(raw),
+                "card_offers": _card_offers_map(raw),
+            }
     try:
         from discounts_bundled import BUNDLED_OVERRIDES
     except ImportError:
+        return {"overrides": {}, "card_offers": {}}
+    raw = BUNDLED_OVERRIDES if isinstance(BUNDLED_OVERRIDES, dict) else {}
+    return {
+        "updated": raw.get("updated"),
+        "overrides": _overrides_map(raw),
+        "card_offers": _card_offers_map(raw),
+    }
+
+
+def load_overrides() -> dict[str, Any]:
+    return load_discount_doc().get("overrides") or {}
+
+
+def load_banks() -> dict[str, Any]:
+    raw = load_json(BANKS, {"banks": [], "cards": []})
+    banks = [item for item in raw.get("banks", []) if isinstance(item, dict) and item.get("id") and item.get("name")]
+    cards = [item for item in raw.get("cards", []) if isinstance(item, dict) and item.get("id") in CARD_TYPES]
+    return {"banks": banks, "cards": cards}
+
+
+def bank_ids() -> set[str]:
+    return {str(item["id"]) for item in load_banks()["banks"]}
+
+
+def parse_card_offer(raw: Any, known_banks: set[str] | None = None) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    banks = known_banks if known_banks is not None else bank_ids()
+    bank = str(raw.get("bank") or "")
+    card = str(raw.get("card") or "")
+    if bank not in banks or card not in CARD_TYPES:
+        return None
+    incoming = raw.get("discounts") if isinstance(raw.get("discounts"), dict) else {}
+    cuts: dict[str, float] = {}
+    for key in FUEL_KEYS:
+        if key not in incoming:
+            continue
+        cut = parse_cut(incoming.get(key))
+        if cut is not None:
+            cuts[key] = cut
+    return {"bank": bank, "card": card, "discounts": cuts}
+
+
+def sanitize_card_offers(form: Any) -> dict[str, Any]:
+    if not isinstance(form, dict):
         return {}
-    return _overrides_map(BUNDLED_OVERRIDES)
+    known = {partner["id"] for partner in load_json(PARTNERS, {"partners": []}).get("partners", [])}
+    banks = bank_ids()
+    out: dict[str, Any] = {}
+    for pid, raw in form.items():
+        if pid not in known:
+            continue
+        offer = parse_card_offer(raw, banks)
+        if offer:
+            out[pid] = offer
+    return out
+
+
+def load_card_offers() -> dict[str, Any]:
+    return sanitize_card_offers(load_discount_doc().get("card_offers"))
 
 
 def parse_cut(value: Any) -> float | None:
@@ -1092,6 +1162,7 @@ def same_cut(a: Any, b: Any) -> bool:
 
 def merge_partners(doc: dict[str, Any]) -> dict[str, Any]:
     overrides = load_overrides()
+    offers = load_card_offers()
     merged = json.loads(json.dumps(doc))
     for partner in merged.get("partners", []):
         discounts = dict(partner.get("discounts") or {})
@@ -1101,12 +1172,15 @@ def merge_partners(doc: dict[str, Any]) -> dict[str, Any]:
                 if key in over:
                     discounts[key] = parse_cut(over[key])
         partner["discounts"] = discounts
+        partner["card_offer"] = offers.get(partner.get("id"))
     return merged
 
 
 def discounts_editor() -> dict[str, Any]:
     catalog = load_json(PARTNERS, {"partners": []})
     overrides = load_overrides()
+    offers = load_card_offers()
+    banks = load_banks()
     rows = []
     dirty = False
     for partner in catalog.get("partners", []):
@@ -1126,12 +1200,21 @@ def discounts_editor() -> dict[str, Any]:
                 "catalog": partner.get("discounts") or {},
                 "current": current,
                 "overridden": bool(over),
+                "card_offer": offers.get(partner["id"]),
             }
         )
-    return {"ok": True, "rows": rows, "keys": list(FUEL_KEYS), "customized": dirty}
+    return {
+        "ok": True,
+        "rows": rows,
+        "keys": list(FUEL_KEYS),
+        "customized": dirty,
+        "card_offers": offers,
+        "banks": banks["banks"],
+        "cards": banks["cards"],
+    }
 
 
-def save_overrides(form: dict[str, Any]) -> dict[str, Any]:
+def save_overrides(form: dict[str, Any], card_offers: Any = None) -> dict[str, Any]:
     catalog = {p["id"]: p.get("discounts") or {} for p in load_json(PARTNERS, {"partners": []}).get("partners", [])}
     overrides: dict[str, Any] = {}
     for pid, vals in form.items():
@@ -1148,14 +1231,24 @@ def save_overrides(form: dict[str, Any]) -> dict[str, Any]:
             diff["dieselplus"] = diff["diesel"]
         if diff:
             overrides[pid] = diff
-    payload = {"updated": now_iso(), "overrides": overrides}
+    payload = {
+        "updated": now_iso(),
+        "overrides": overrides,
+        "card_offers": load_discount_doc().get("card_offers") or {},
+    }
+    if card_offers is not None:
+        payload["card_offers"] = sanitize_card_offers(card_offers)
     save_json(OVERRIDES, payload)
     write_bundled_overrides(payload)
     return sync_discounts_to_origin()
 
 
 def reset_overrides() -> dict[str, Any]:
-    payload = {"updated": now_iso(), "overrides": {}}
+    payload = {
+        "updated": now_iso(),
+        "overrides": {},
+        "card_offers": load_discount_doc().get("card_offers") or {},
+    }
     save_json(OVERRIDES, payload)
     write_bundled_overrides(payload)
     return sync_discounts_to_origin()
@@ -1357,7 +1450,24 @@ def apply_discounts(
             real[key] = None
         else:
             real[key] = round(max(0.0, retail - float(cut)), 2)
-    return {"retail": prices, "discount": discounts, "real": real, "sources": sources or {}}
+    pack = {"retail": prices, "discount": discounts, "real": real, "sources": sources or {}}
+    offer = partner.get("card_offer")
+    if isinstance(offer, dict) and offer.get("discounts"):
+        card_disc = offer["discounts"]
+        card_real: dict[str, float | None] = {}
+        for key, retail in prices.items():
+            cut = card_disc.get(key)
+            if cut is None and key == "dieselplus":
+                cut = card_disc.get("diesel")
+            if retail is None or cut is None:
+                card_real[key] = None
+            else:
+                card_real[key] = round(max(0.0, retail - float(cut)), 2)
+        pack["card_discount"] = card_disc
+        pack["card_real"] = card_real
+        pack["card_bank"] = offer.get("bank")
+        pack["card_brand"] = offer.get("card")
+    return pack
 
 
 def partner_sources(partner: dict[str, Any], sources_map: dict[str, Any]) -> dict[str, str]:
@@ -1406,6 +1516,7 @@ def build_state(scraped: dict[str, Any] | None, partners_doc: dict[str, Any], er
                 "extras": partner.get("extras", []),
                 "limit": partner.get("limit"),
                 "shareable": bool(partner.get("shareable")),
+                "card_offer": partner.get("card_offer"),
                 "regions": by_region,
             }
         )
@@ -1486,6 +1597,8 @@ def public_state(do_refresh: bool = False, rebuild: bool = False) -> dict[str, A
         payload = current_state()
     out = dict(payload)
     out["hosted"] = is_hosted()
+    out["banks"] = load_banks()
+    out["card_offers"] = load_card_offers()
     if is_hosted():
         out.pop("access", None)
         return out
@@ -1542,6 +1655,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             self._json(discounts_editor())
             return
+        if path.startswith("/api/"):
+            self._json({"ok": False, "error": "unknown endpoint"}, 404)
+            return
         if path in {"/", "/index.html"}:
             self.path = "/index.html"
         super().do_GET()
@@ -1566,7 +1682,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"ok": False, "error": "Редактор знижок лише локально"}, 404)
                 return
         if path == "/api/discounts":
-            published = save_overrides(body.get("overrides") or {})
+            published = save_overrides(body.get("overrides") or {}, body.get("card_offers"))
             self._json({"ok": True, "published": published, "editor": discounts_editor(), "state": public_state(rebuild=True)})
             return
         if path == "/api/discounts/reset":
@@ -1637,6 +1753,62 @@ def with_access(state: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+class _LocalHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = False
+    daemon_threads = True
+
+
+def _listen_pids(port: int) -> list[int]:
+    if os.name != "nt":
+        return []
+    try:
+        raw = subprocess.check_output(["netstat", "-ano"], text=True, encoding="utf-8", errors="ignore")
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    pids: list[int] = []
+    marker = f":{port}"
+    for line in raw.splitlines():
+        if marker not in line or "LISTENING" not in line:
+            continue
+        pid_text = line.split()[-1]
+        if not pid_text.isdigit():
+            continue
+        pid = int(pid_text)
+        if pid not in (0, os.getpid()) and pid not in pids:
+            pids.append(pid)
+    return pids
+
+
+def _free_listen_port(port: int) -> None:
+    for pid in _listen_pids(port):
+        print(f"port {port} busy — stopping PID {pid}", flush=True)
+        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, check=False)
+        time.sleep(0.3)
+
+
+def _bind_local(port: int) -> _LocalHTTPServer:
+    _free_listen_port(port)
+    last: OSError | None = None
+    for _ in range(8):
+        try:
+            return _LocalHTTPServer(("0.0.0.0", port), Handler)
+        except OSError as exc:
+            last = exc
+            time.sleep(0.4)
+    assert last is not None
+    raise last
+
+
+def _boot_prices() -> None:
+    print("AZS WATCH // ARMY+  —  loading prices...", flush=True)
+    try:
+        refresh()
+    except Exception as exc:
+        print(f"boot refresh failed: {exc}", flush=True)
+        schedule_next()
+    monitor_loop()
+
+
 def main() -> None:
     global _listen_port
     parser = argparse.ArgumentParser(description="AZS WATCH dashboard")
@@ -1646,11 +1818,13 @@ def main() -> None:
     _listen_port = args.port
 
     DATA.mkdir(parents=True, exist_ok=True)
-    print("AZS WATCH // ARMY+  —  loading prices...", flush=True)
-    refresh()
-    threading.Thread(target=monitor_loop, daemon=True).start()
+    try:
+        httpd = _bind_local(args.port)
+    except OSError:
+        print(f"порт {args.port} зайнятий. Закрийте інше вікно start.bat і спробуйте ще раз.", flush=True)
+        raise SystemExit(1)
+    threading.Thread(target=_boot_prices, daemon=True).start()
 
-    httpd = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     info = access_info()
     print(f"AZS WATCH online  {info['local']}", flush=True)
     if info["phone"]:
@@ -1660,7 +1834,7 @@ def main() -> None:
     print("same Wi-Fi, iPhone hotspot, or Tailscale. If Safari fails, run allow-phone.bat as admin.", flush=True)
     print("Stop: Ctrl+C", flush=True)
     if not args.no_browser:
-        threading.Thread(target=lambda: (time.sleep(0.6), webbrowser.open(info["local"])), daemon=True).start()
+        threading.Thread(target=lambda: (time.sleep(0.4), webbrowser.open(info["local"])), daemon=True).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

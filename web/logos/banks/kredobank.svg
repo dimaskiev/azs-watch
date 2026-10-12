@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" role="img">
+  <rect width="160" height="40" rx="4" fill="#fff"/>
+  <circle cx="18" cy="20" r="8" fill="#c8102e"/>
+  <text x="96" y="27" text-anchor="middle" fill="#c8102e" font-family="Arial, sans-serif" font-size="14" font-weight="800">КРЕДОБАНК</text>
+</svg>

@@ -1,4 +1,5 @@
 const KEY = "azs-watch-settings";
+const CARD_OFFERS_KEY = "azs-watch-card-offers";
 const LABELS = {
   a95: "Бензин звичайний · А-95",
   a95plus: "Бензин фірмовий · А-95+",
@@ -37,6 +38,8 @@ const state = {
   tab: "calc",
   editor: null,
   openCard: null,
+  cardOffers: {},
+  cardHydrated: false,
 };
 
 function loadSettings() {
@@ -108,6 +111,104 @@ function tierHint() {
   return "А-95 Євро · не 98";
 }
 
+function banksCatalog() {
+  return (state.data && state.data.banks && state.data.banks.banks) || [];
+}
+
+function cardsCatalog() {
+  return (state.data && state.data.banks && state.data.banks.cards) || [
+    { id: "visa", name: "Visa" },
+    { id: "mastercard", name: "Mastercard" },
+  ];
+}
+
+function bankById(id) {
+  return banksCatalog().find((item) => item.id === id) || null;
+}
+
+function cardById(id) {
+  return cardsCatalog().find((item) => item.id === id) || null;
+}
+
+function bankLogo(id) {
+  return id ? `logos/banks/${id}.svg` : "";
+}
+
+function payLogo(id) {
+  return id ? `logos/cards/${id}.svg` : "";
+}
+
+function parseOfferCut(value) {
+  if (value == null || value === "") return null;
+  const cut = Number(value);
+  if (Number.isNaN(cut) || cut < 0 || cut > 20) return null;
+  return Math.round(cut * 100) / 100;
+}
+
+function sanitizeCardOffers(raw) {
+  const banks = new Set(banksCatalog().map((item) => item.id));
+  const partners = new Set((state.data?.partners || []).map((item) => item.id));
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  Object.entries(raw).forEach(([pid, offer]) => {
+    if (partners.size && !partners.has(pid)) return;
+    if (!offer || !banks.has(offer.bank) || !["visa", "mastercard"].includes(offer.card)) return;
+    const discounts = {};
+    EDIT_KEYS.forEach((key) => {
+      const cut = parseOfferCut(offer.discounts ? offer.discounts[key] : null);
+      if (cut != null) discounts[key] = cut;
+    });
+    out[pid] = { bank: offer.bank, card: offer.card, discounts };
+  });
+  return out;
+}
+
+function loadLocalCardOffers() {
+  try {
+    return sanitizeCardOffers(JSON.parse(localStorage.getItem(CARD_OFFERS_KEY) || "{}"));
+  } catch {
+    return {};
+  }
+}
+
+function saveCardOffers() {
+  localStorage.setItem(CARD_OFFERS_KEY, JSON.stringify(state.cardOffers));
+}
+
+function hydrateCardOffers() {
+  if (state.cardHydrated) return;
+  const local = loadLocalCardOffers();
+  const fromApi = sanitizeCardOffers(state.data?.card_offers || {});
+  state.cardOffers = Object.keys(local).length ? { ...fromApi, ...local } : fromApi;
+  state.cardHydrated = true;
+  saveCardOffers();
+}
+
+function mergedCardOffers() {
+  return state.cardOffers;
+}
+
+function cardDeal(partnerId, retail, key, liters) {
+  const offer = mergedCardOffers()[partnerId];
+  if (!offer) return null;
+  let cut = parseOfferCut(offer.discounts ? offer.discounts[key] : null);
+  if (cut == null && key === "dieselplus") cut = parseOfferCut(offer.discounts ? offer.discounts.diesel : null);
+  if (retail == null || cut == null) return null;
+  const real = round2(Math.max(0, retail - cut));
+  const bank = bankById(offer.bank);
+  const brand = cardById(offer.card);
+  return {
+    bank: offer.bank,
+    card: offer.card,
+    bankName: bank ? bank.name : offer.bank,
+    cardName: brand ? brand.name : offer.card,
+    discount: cut,
+    real,
+    fill: round2(real * liters),
+    saved: round2(cut * liters),
+  };
+}
+
 function regionBundle(partner) {
   const wanted = state.settings.region;
   const pack = partner.regions[wanted];
@@ -132,7 +233,8 @@ function rows() {
       const source = (pack?.sources && pack.sources[key]) || "";
       const fill = real != null ? round2(real * liters) : null;
       const saved = discount != null ? round2(discount * liters) : null;
-      return { ...p, retail, discount, real, fill, saved, source, inRegion, missing };
+      const card = cardDeal(p.id, retail, key, liters);
+      return { ...p, retail, discount, real, fill, saved, card, source, inRegion, missing };
     })
     .filter((p) => p.inRegion);
 }
@@ -141,14 +243,37 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
-function sortedRows() {
-  return rows().sort((a, b) => {
+function offerRows() {
+  const expanded = [];
+  rows().forEach((p) => {
+    expanded.push({
+      ...p,
+      offerKey: p.id,
+      offerKind: "army",
+      offerTitle: "Армія+",
+      card: null,
+    });
+    if (p.card) {
+      expanded.push({
+        ...p,
+        offerKey: `${p.id}-card`,
+        offerKind: "card",
+        offerTitle: `${p.card.bankName} · ${p.card.cardName}`,
+        discount: p.card.discount,
+        real: p.card.real,
+        fill: p.card.fill,
+        saved: p.card.saved,
+      });
+    }
+  });
+  return expanded.sort((a, b) => {
     const ar = a.real == null ? 1e9 : a.real;
     const br = b.real == null ? 1e9 : b.real;
     if (ar !== br) return ar - br;
     const af = a.fill == null ? 1e9 : a.fill;
     const bf = b.fill == null ? 1e9 : b.fill;
     if (af !== bf) return af - bf;
+    if (a.offerKind !== b.offerKind) return a.offerKind === "army" ? -1 : 1;
     return a.name.localeCompare(b.name, "uk");
   });
 }
@@ -162,17 +287,22 @@ function isCheapest(item, list) {
   return low != null && item.real != null && item.real === low;
 }
 
+function offerName(item) {
+  if (item.offerKind === "card" && item.card) return `${item.name} · ${item.card.bankName}`;
+  return item.name;
+}
+
 function renderKpis(list) {
   const priced = list.filter((x) => x.real != null).slice().sort((a, b) => a.real - b.real);
   const best = priced[0];
   const ties = priced.filter((x) => best && x.real === best.real);
   const liters = Number(state.settings.liters) || 0;
-  const saveSum = best && best.discount != null ? best.discount * liters : null;
+  const saveSum = best && best.saved != null ? best.saved : null;
   $("kpis").innerHTML = [
-    kpi("ОПТИМУМ", best ? money(best.real) : "—", best ? `${ties.map((x) => x.name).join(", ")} · грн/л` : "немає в області"),
+    kpi("ОПТИМУМ", best ? money(best.real) : "—", best ? `${ties.map((x) => offerName(x)).join(", ")} · грн/л` : "немає в області"),
     kpi("ЗАПРАВКА", best && best.fill != null ? money(best.fill) : "—", `${liters} л на найдешевшій`),
     kpi("ЕКОНОМІЯ", saveSum != null ? `−${money(saveSum)}` : "—", `${liters} л зі знижкою`),
-    kpi("МЕРЕЖ В ОБЛАСТІ", String(list.length), "партнери Плюсів з цим пальним"),
+    kpi("ПРОПОЗИЦІЙ", String(list.length), "Армія+ і картки банків"),
   ].join("");
 }
 
@@ -225,10 +355,23 @@ function logoMark(item, extraClass) {
   return `<span class="logo img${cls}" aria-hidden="true"><img src="${esc(src)}" alt=""></span>`;
 }
 
+function bankMark(card) {
+  if (!card) return "";
+  return `<span class="logo img bank-mark" aria-hidden="true"><img src="${esc(bankLogo(card.bank))}" alt=""></span>
+    <span class="logo img pay-mark" aria-hidden="true"><img src="${esc(payLogo(card.card))}" alt=""></span>`;
+}
+
 function netCell(item, best) {
   const brand = brandLine(item);
   const tag = best ? `<span class="opt-tag">оптимум</span>` : "";
-  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${esc(item.name)}${tag}</div>${brand ? `<small class="net-brand">${esc(brand)}</small>` : ""}</div></div>`;
+  if (item.offerKind === "card" && item.card) {
+    return `<div class="net">${logoMark(item, "net-logo")}${bankMark(item.card)}<div>
+      <div>${esc(item.name)}${tag}</div>
+      <small class="net-brand">${esc(item.card.bankName)} · ${esc(item.card.cardName)}</small>
+    </div></div>`;
+  }
+  const sub = item.offerKind === "army" ? `Армія+${brand ? ` · ${brand}` : ""}` : brand;
+  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${esc(item.name)}${tag}</div>${sub ? `<small class="net-brand">${esc(sub)}</small>` : ""}</div></div>`;
 }
 
 function renderGrid(list) {
@@ -246,10 +389,10 @@ function renderGrid(list) {
   const head = `
     <thead><tr>
       <th>#</th>
-      <th>Мережа</th>
+      <th>Пропозиція</th>
       <th class="num">Стеля, грн/л</th>
       <th class="num">Знижка</th>
-      <th class="num">З Армія+, грн/л</th>
+      <th class="num">Ціна, грн/л</th>
       <th class="num">Заправка ${liters} л</th>
       <th class="num">Економія</th>
       <th>Умови</th>
@@ -259,16 +402,19 @@ function renderGrid(list) {
     $("grid").innerHTML = `<div class="cards">${list
       .map((p, i) => {
         const best = isCheapest(p, list);
-        const open = state.openCard === p.id;
-        return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""}">
+        const open = state.openCard === p.offerKey;
+        const card = p.offerKind === "card" ? p.card : null;
+        const priceLabel = card ? `з ${card.cardName}` : "з Армія+";
+        return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""} ${card ? "bank-offer" : ""}">
           ${best ? `<p class="m-best-tag">НАЙДЕШЕВША</p>` : ""}
-          <button class="m-logo" type="button" data-open="${esc(p.id)}" aria-expanded="${open}" aria-label="${esc(p.name)}, ${open ? "сховати деталі" : "показати деталі"}">
+          <button class="m-logo" type="button" data-open="${esc(p.offerKey)}" aria-expanded="${open}" aria-label="${esc(offerName(p))}, ${open ? "сховати деталі" : "показати деталі"}">
             ${logoMark(p)}
+            ${card ? bankMark(card) : ""}
             <i class="m-logo-plus">${open ? "−" : "+"}</i>
           </button>
           <div class="m-sum">
             <div class="m-cell hi">
-              <span>з Армія+</span>
+              <span>${esc(priceLabel)}</span>
               <b>${p.real != null ? money(p.real) : "—"}</b>
               <em>грн/л</em>
             </div>
@@ -287,12 +433,12 @@ function renderGrid(list) {
             <div class="m-head">
               <span class="m-rank">${String(i + 1).padStart(2, "0")}</span>
               <h3>${esc(p.name)}</h3>
-              ${brandLine(p) ? `<p class="net-brand">${esc(brandLine(p))}</p>` : ""}
+              <p class="net-brand">${esc(p.offerTitle || "Армія+")}${brandLine(p) ? ` · ${esc(brandLine(p))}` : ""}</p>
             </div>
             <div class="m-prices">
               <div><span>Стеля</span><b>${money(p.retail)}</b></div>
               <div><span>Знижка</span><b>${p.discount != null ? "−" + money(p.discount) : "—"}</b></div>
-              <div class="hi"><span>З Армія+</span><b>${p.real != null ? money(p.real) : "—"}</b></div>
+              <div class="hi"><span>${esc(p.offerTitle || "Армія+")}</span><b>${p.real != null ? money(p.real) : "—"}</b></div>
             </div>
             <p class="m-fill">${liters} л = <b>${p.fill != null ? money(p.fill) : "—"}</b> грн</p>
             <p class="m-save">економія ${p.saved != null ? money(p.saved) : "—"} грн</p>
@@ -307,7 +453,7 @@ function renderGrid(list) {
   const body = list
     .map((p, i) => {
       const best = isCheapest(p, list);
-      return `<tr class="${best ? "best" : ""}">
+      return `<tr class="${best ? "best" : ""} ${p.offerKind === "card" ? "bank-offer" : ""}">
         <td>${String(i + 1).padStart(2, "0")}</td>
         <td>${netCell(p, best)}</td>
         <td class="num">${money(p.retail)}</td>
@@ -437,7 +583,10 @@ function showTab(tab) {
   });
   $("view-calc").classList.toggle("hidden", tab !== "calc");
   $("view-discounts").classList.toggle("hidden", tab !== "discounts");
-  if (tab === "discounts") loadEditor();
+  if (tab === "discounts") {
+    loadEditor();
+    renderCardDeals();
+  }
   applyHostedChrome();
 }
 
@@ -499,7 +648,7 @@ async function saveEditor() {
     const res = await fetch("/api/discounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ overrides }),
+      body: JSON.stringify({ overrides, card_offers: state.cardOffers }),
     });
     const payload = await res.json();
     state.editor = payload.editor;
@@ -539,13 +688,120 @@ async function resetEditor() {
   }
 }
 
+function unusedCardPartners() {
+  const used = new Set(Object.keys(mergedCardOffers()));
+  return (state.data?.partners || []).filter((item) => !used.has(item.id));
+}
+
+function renderCardDeals() {
+  const box = $("card-deals");
+  const addBtn = $("add-card-deal");
+  if (!box || !addBtn) return;
+  const offers = mergedCardOffers();
+  const partners = state.data?.partners || [];
+  const banks = banksCatalog();
+  const cards = cardsCatalog();
+  box.innerHTML = partners
+    .filter((partner) => offers[partner.id])
+    .map((partner) => {
+      const offer = offers[partner.id];
+      const cuts = EDIT_KEYS.map((key) => {
+        const cur = offer.discounts && offer.discounts[key] != null ? offer.discounts[key] : "";
+        return `<label class="opt"><span>${esc(EDIT_LABELS[key])}</span>
+          <input class="cut" data-card-cut="${esc(partner.id)}" data-key="${esc(key)}" type="number" min="0" max="20" step="0.1" placeholder="—" value="${esc(cur)}" /></label>`;
+      }).join("");
+      const bankBtns = banks.map((bank) => `<button class="bank-pick${bank.id === offer.bank ? " on" : ""}" type="button" data-card-bank="${esc(partner.id)}" data-bank="${esc(bank.id)}">
+        <img class="bank-logo" src="${esc(bankLogo(bank.id))}" alt="">
+        <span>${esc(bank.name)}</span>
+      </button>`).join("");
+      const payBtns = cards.map((card) => `<button class="pay-pick${card.id === offer.card ? " on" : ""}" type="button" data-card-pay="${esc(partner.id)}" data-card="${esc(card.id)}">
+        <img class="pay-logo" src="${esc(payLogo(card.id))}" alt="">
+        <span>${esc(card.name)}</span>
+      </button>`).join("");
+      const choices = partners.filter((item) => item.id === partner.id || !offers[item.id]);
+      const netOpts = choices.map((item) => `<option value="${esc(item.id)}"${item.id === partner.id ? " selected" : ""}>${esc(item.name)}</option>`).join("");
+      return `<article class="card-deal">
+        <div class="card-deal-top">
+          <label class="opt"><span>Мережа</span>
+            <select data-card-network="${esc(partner.id)}">${netOpts}</select>
+          </label>
+          <button class="card-deal-remove" type="button" data-card-remove="${esc(partner.id)}">ПРИБРАТИ</button>
+        </div>
+        <p class="step-n">Банк</p>
+        <div class="bank-grid">${bankBtns}</div>
+        <p class="step-n">Тип карти</p>
+        <div class="pay-row">${payBtns}</div>
+        <p class="step-n">Знижка карткою, грн/л</p>
+        <div class="card-cuts">${cuts}</div>
+      </article>`;
+    })
+    .join("");
+  addBtn.disabled = unusedCardPartners().length === 0;
+}
+
+function setCardOffer(pid, patch, refreshDeals = true) {
+  const current = state.cardOffers[pid] || { bank: "privatbank", card: "visa", discounts: {} };
+  const discounts = { ...current.discounts };
+  if (patch.discounts) {
+    Object.entries(patch.discounts).forEach(([key, value]) => {
+      const cut = parseOfferCut(value);
+      if (cut == null) delete discounts[key];
+      else discounts[key] = cut;
+    });
+  }
+  state.cardOffers = {
+    ...state.cardOffers,
+    [pid]: {
+      bank: patch.bank || current.bank,
+      card: patch.card || current.card,
+      discounts,
+    },
+  };
+  saveCardOffers();
+  if (!refreshDeals) {
+    const list = offerRows();
+    renderKpis(list);
+    renderGrid(list);
+    return;
+  }
+  paint();
+}
+
+function removeCardOffer(pid) {
+  const next = { ...mergedCardOffers() };
+  delete next[pid];
+  state.cardOffers = next;
+  saveCardOffers();
+  paint();
+}
+
+function moveCardOffer(fromId, toId) {
+  if (!fromId || !toId || fromId === toId || state.cardOffers[toId]) return;
+  const offer = state.cardOffers[fromId];
+  if (!offer) return;
+  const next = { ...state.cardOffers };
+  delete next[fromId];
+  next[toId] = offer;
+  state.cardOffers = next;
+  saveCardOffers();
+  paint();
+}
+
+function addCardOffer() {
+  const next = unusedCardPartners()[0];
+  if (!next) return;
+  const banks = banksCatalog();
+  setCardOffer(next.id, { bank: banks[0] ? banks[0].id : "privatbank", card: "visa", discounts: {} });
+}
+
 function paint() {
   if (!state.data) return;
   applyControls();
-  const list = sortedRows();
+  const list = offerRows();
   renderMeta();
   renderKpis(list);
   renderGrid(list);
+  if (state.tab === "discounts") renderCardDeals();
 }
 
 async function load(path, options = {}) {
@@ -560,6 +816,7 @@ async function load(path, options = {}) {
   state.data = await res.json();
   applyHostedChrome();
   fillRegions();
+  hydrateCardOffers();
   paint();
 }
 
@@ -628,6 +885,39 @@ function bind() {
   });
   $("save-discounts").addEventListener("click", () => saveEditor());
   $("reset-discounts").addEventListener("click", () => resetEditor());
+  if ($("add-card-deal")) {
+    $("add-card-deal").addEventListener("click", () => addCardOffer());
+  }
+  $("card-deals").addEventListener("click", (e) => {
+    const remove = e.target.closest("[data-card-remove]");
+    if (remove) {
+      removeCardOffer(remove.dataset.cardRemove);
+      return;
+    }
+    const bank = e.target.closest("[data-card-bank]");
+    if (bank) {
+      setCardOffer(bank.dataset.cardBank, { bank: bank.dataset.bank });
+      return;
+    }
+    const pay = e.target.closest("[data-card-pay]");
+    if (pay) {
+      setCardOffer(pay.dataset.cardPay, { card: pay.dataset.card });
+    }
+  });
+  $("card-deals").addEventListener("change", (e) => {
+    const sel = e.target.closest("[data-card-network]");
+    if (!sel) return;
+    moveCardOffer(sel.dataset.cardNetwork, sel.value);
+  });
+  $("card-deals").addEventListener("input", (e) => {
+    const input = e.target.closest("[data-card-cut]");
+    if (!input) return;
+    const pid = input.dataset.cardCut;
+    const current = (mergedCardOffers()[pid] && mergedCardOffers()[pid].discounts) || {};
+    const discounts = { ...current, [input.dataset.key]: input.value === "" ? null : Number(input.value) };
+    if (discounts[input.dataset.key] == null) delete discounts[input.dataset.key];
+    setCardOffer(pid, { discounts }, false);
+  });
   window.matchMedia("(max-width: 720px)").addEventListener("change", () => {
     if (state.data) paint();
     if (state.tab === "discounts" && state.editor) renderEditor();

@@ -46,7 +46,7 @@ def api_discounts_save():
     if core.is_hosted():
         return _discounts_local_only()
     body = request.get_json(silent=True) or {}
-    published = core.save_overrides(body.get("overrides") or {})
+    published = core.save_overrides(body.get("overrides") or {}, body.get("card_offers"))
     return _api({"ok": True, "published": published, "editor": core.discounts_editor(), "state": core.public_state(rebuild=True)})
 
 

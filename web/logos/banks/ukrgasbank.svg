@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 40" role="img">
+  <rect width="170" height="40" rx="4" fill="#fff"/>
+  <path fill="#e30613" d="M18 30c2-8 6-14 10-18-1 6 1 11 4 16-5 1-9 2-14 2z"/>
+  <path fill="#003399" d="M32 30c1-5 3-10 7-14 0 5 1 9 2 14h-9z"/>
+  <text x="108" y="27" text-anchor="middle" fill="#e30613" font-family="Arial, sans-serif" font-size="13" font-weight="700">Укргазбанк</text>
+</svg>

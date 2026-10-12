@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" role="img">
+  <rect width="160" height="40" rx="4" fill="#fff"/>
+  <path fill="#00a651" d="M20 31c6-10 8-16 8-22 4 6 7 13 8 22h-5c-1-6-3-11-3-15-1 4-3 9-4 15h-4z"/>
+  <text x="98" y="27" text-anchor="middle" fill="#00a651" font-family="Arial, sans-serif" font-size="15" font-weight="700">Ощадбанк</text>
+</svg>

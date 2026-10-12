@@ -320,6 +320,34 @@ table.sheet .net-logo {
   height: 36px;
   flex: 0 0 36px;
 }
+table.sheet .bank-mark,
+table.sheet .pay-mark {
+  width: 36px;
+  height: 24px;
+  flex: 0 0 auto;
+  background: #fff;
+  border-radius: 4px;
+  padding: 3px;
+}
+table.sheet .bank-mark img,
+table.sheet .pay-mark img,
+.bank-pick img,
+.pay-pick img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+table.sheet .bank-mark { width: 36px; height: 36px; }
+table.sheet tbody tr.bank-offer { background: rgba(201, 176, 122, .06); }
+.m-card.bank-offer { border-color: rgba(201, 176, 122, .4); }
+.m-logo .bank-mark, .m-logo .pay-mark {
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  background: #fff;
+  border-radius: 4px;
+  padding: 2px;
+}
 table.sheet .real { color: var(--sage); font-family: "Chakra Petch", sans-serif; font-size: 20px; }
 table.sheet .fill { color: var(--ink); font-family: "Chakra Petch", sans-serif; font-size: 20px; }
 table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
@@ -537,6 +565,118 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
 }
 .edit-field input.cut { width: 100%; text-align: left; }
 
+.card-frame { margin-top: 16px; }
+.card-deals { display: grid; gap: 12px; margin-bottom: 12px; }
+.card-deal {
+  background: #0e110d;
+  border: 1px solid var(--line);
+  padding: 12px;
+}
+.card-deal-top {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.card-deal-top .opt { min-width: 180px; flex: 1; }
+.card-deal-remove {
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--hot);
+  border: 1px solid rgba(196, 92, 38, .45);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  letter-spacing: .1em;
+  min-height: 40px;
+  padding: 0 12px;
+}
+.bank-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.bank-pick, .pay-pick {
+  appearance: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
+  background: #12160f;
+  color: var(--tan);
+  border: 1px solid var(--line);
+  text-align: left;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 14px;
+}
+.bank-pick.on, .pay-pick.on {
+  border-color: var(--sage);
+  background: rgba(143, 163, 90, .14);
+  color: var(--ink);
+}
+.bank-logo, .pay-logo, .mini-logo {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: block;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #0b0d0a;
+}
+.pay-logo { width: 42px; height: 28px; flex-basis: 42px; }
+.pay-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.card-cuts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.price-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+.price-stack.left { align-items: flex-start; }
+.price-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.price-line small {
+  display: block;
+  color: var(--mute);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+.price-line.card b { color: var(--khaki); }
+.m-sum.carded { grid-template-columns: 1fr 1fr; }
+.m-card-row {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.m-cell.card { border-color: rgba(201, 176, 122, .4); }
+.m-cell.card b { color: var(--khaki); }
+.pay-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--khaki);
+  font-size: 12px;
+}
+
 @media (max-width: 900px) {
   .steps { grid-template-columns: 1fr; }
   .kpis { grid-template-columns: 1fr 1fr; }
@@ -571,6 +711,9 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   .board { padding-top: 12px; }
   #view-discounts .board { padding-left: 0; padding-right: 0; }
   .edit-grid { grid-template-columns: 1fr 1fr; }
+  .card-cuts { grid-template-columns: 1fr 1fr; }
+  .bank-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .m-card-row { grid-column: 1 / -1; }
 }
 
 @media (max-width: 420px) {

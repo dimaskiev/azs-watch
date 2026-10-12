@@ -1,0 +1,33 @@
+{
+  "cards": [
+    { "id": "visa", "name": "Visa" },
+    { "id": "mastercard", "name": "Mastercard" }
+  ],
+  "banks": [
+    { "id": "privatbank", "name": "ПриватБанк", "short": "ПБ", "color": "#54b948" },
+    { "id": "oschadbank", "name": "Ощадбанк", "short": "ОЩ", "color": "#00a651" },
+    { "id": "ukreximbank", "name": "Укрексімбанк", "short": "ЕКС", "color": "#003366" },
+    { "id": "ukrgasbank", "name": "Укргазбанк", "short": "УГБ", "color": "#e30613" },
+    { "id": "raiffeisen", "name": "Райффайзен Банк", "short": "RZF", "color": "#111111" },
+    { "id": "pumb", "name": "ПУМБ", "short": "ПУМБ", "color": "#00a0e3" },
+    { "id": "ukrsibbank", "name": "Укрсиббанк", "short": "УСБ", "color": "#e30613" },
+    { "id": "creditagricole", "name": "Креді Агріколь", "short": "CA", "color": "#006633" },
+    { "id": "otp", "name": "ОТП Банк", "short": "ОТП", "color": "#00a3e0" },
+    { "id": "monobank", "name": "monobank", "short": "mono", "color": "#111111" },
+    { "id": "sense", "name": "Сенс Банк", "short": "СЕНС", "color": "#1a1a1a" },
+    { "id": "pivdenny", "name": "Південний", "short": "ПВД", "color": "#0055a5" },
+    { "id": "kredobank", "name": "Кредобанк", "short": "КРЕ", "color": "#c8102e" },
+    { "id": "tascombank", "name": "Таскомбанк", "short": "ТАС", "color": "#1b4f9c" },
+    { "id": "creditdnepr", "name": "Кредит Дніпро", "short": "КД", "color": "#c8102e" },
+    { "id": "abank", "name": "А-Банк", "short": "А", "color": "#e30613" },
+    { "id": "procredit", "name": "Прокредит Банк", "short": "ПК", "color": "#e87722" },
+    { "id": "ideabank", "name": "Ідея Банк", "short": "ІДЕЯ", "color": "#6c1d5f" },
+    { "id": "vostok", "name": "Банк Восток", "short": "ВСК", "color": "#00a0dc" },
+    { "id": "mtb", "name": "МТБ Банк", "short": "МТБ", "color": "#0033a0" },
+    { "id": "lviv", "name": "Банк Львів", "short": "ЛВВ", "color": "#1e4d2b" },
+    { "id": "globus", "name": "Глобус", "short": "ГЛБ", "color": "#0b6e4f" },
+    { "id": "piraeus", "name": "Піреус Банк", "short": "ПРС", "color": "#004b87" },
+    { "id": "pravex", "name": "Правекс Банк", "short": "ПРВ", "color": "#c8102e" },
+    { "id": "accordbank", "name": "Акордбанк", "short": "АКР", "color": "#1a1a2e" }
+  ]
+}
