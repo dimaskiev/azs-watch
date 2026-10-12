@@ -43,14 +43,14 @@
       "name": "Райффайзен Банк",
       "short": "RZF",
       "color": "#111111",
-      "logo": "raiffeisen.png"
+      "logo": "raiffeisen.svg"
     },
     {
       "id": "pumb",
       "name": "ПУМБ",
       "short": "ПУМБ",
       "color": "#00a0e3",
-      "logo": "pumb.svg"
+      "logo": "pumb.png"
     },
     {
       "id": "ukrsibbank",
@@ -120,7 +120,7 @@
       "name": "А-Банк",
       "short": "А",
       "color": "#e30613",
-      "logo": "abank.svg"
+      "logo": "abank.png"
     },
     {
       "id": "procredit",
