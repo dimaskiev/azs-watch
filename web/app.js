@@ -50,15 +50,17 @@ function loadSettings() {
       region: "Україна",
       liters: 40,
       sort: "fill",
+      rankMode: "army",
       ...JSON.parse(localStorage.getItem(KEY) || "{}"),
     };
+    if (raw.rankMode !== "banks") raw.rankMode = "army";
     if (raw.grade === "a95plus") raw.tier = "premium";
     else if (raw.grade === "a92") raw.tier = "a92";
     else if (raw.grade === "a95") raw.tier = "regular";
     if (!["regular", "premium", "a92"].includes(raw.tier)) raw.tier = "regular";
     return raw;
   } catch {
-    return { fuel: "petrol", tier: "regular", region: "Україна", liters: 40, sort: "fill" };
+    return { fuel: "petrol", tier: "regular", region: "Україна", liters: 40, sort: "fill", rankMode: "army" };
   }
 }
 
@@ -245,66 +247,74 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
+function rankMode() {
+  return state.settings.rankMode === "banks" ? "banks" : "army";
+}
+
+function showCardDeal(item) {
+  return rankMode() === "banks" && !!item.card;
+}
+
+function rankDeal(item) {
+  if (showCardDeal(item) && item.card.real != null) return item.card;
+  return null;
+}
+
+function rankReal(item) {
+  const deal = rankDeal(item);
+  return deal ? deal.real : item.real;
+}
+
+function rankFill(item) {
+  const deal = rankDeal(item);
+  return deal ? deal.fill : item.fill;
+}
+
+function rankSaved(item) {
+  const deal = rankDeal(item);
+  return deal ? deal.saved : item.saved;
+}
+
 function offerRows() {
-  const expanded = [];
-  rows().forEach((p) => {
-    expanded.push({
-      ...p,
-      offerKey: p.id,
-      offerKind: "army",
-      offerTitle: "Армія+",
-      card: null,
+  return rows()
+    .map((p) => ({ ...p, offerKey: p.id }))
+    .sort((a, b) => {
+      const ar = rankReal(a) == null ? 1e9 : rankReal(a);
+      const br = rankReal(b) == null ? 1e9 : rankReal(b);
+      if (ar !== br) return ar - br;
+      return a.name.localeCompare(b.name, "uk");
     });
-    if (p.card) {
-      expanded.push({
-        ...p,
-        offerKey: `${p.id}-card`,
-        offerKind: "card",
-        offerTitle: `${p.card.bankName} · ${p.card.cardName}`,
-        discount: p.card.discount,
-        real: p.card.real,
-        fill: p.card.fill,
-        saved: p.card.saved,
-      });
-    }
-  });
-  return expanded.sort((a, b) => {
-    const ar = a.real == null ? 1e9 : a.real;
-    const br = b.real == null ? 1e9 : b.real;
-    if (ar !== br) return ar - br;
-    const af = a.fill == null ? 1e9 : a.fill;
-    const bf = b.fill == null ? 1e9 : b.fill;
-    if (af !== bf) return af - bf;
-    if (a.offerKind !== b.offerKind) return a.offerKind === "army" ? -1 : 1;
-    return a.name.localeCompare(b.name, "uk");
-  });
 }
 
 function cheapestReal(list) {
-  return list.reduce((m, p) => (p.real != null && (m == null || p.real < m) ? p.real : m), null);
+  return list.reduce((m, p) => {
+    const r = rankReal(p);
+    return r != null && (m == null || r < m) ? r : m;
+  }, null);
 }
 
 function isCheapest(item, list) {
   const low = cheapestReal(list);
-  return low != null && item.real != null && item.real === low;
+  const r = rankReal(item);
+  return low != null && r != null && r === low;
 }
 
 function offerName(item) {
-  if (item.offerKind === "card" && item.card) return `${item.name} · ${item.card.bankName}`;
   return item.name;
 }
 
 function renderKpis(list) {
-  const priced = list.filter((x) => x.real != null).slice().sort((a, b) => a.real - b.real);
+  const priced = list.filter((x) => rankReal(x) != null).slice().sort((a, b) => rankReal(a) - rankReal(b));
   const best = priced[0];
-  const ties = priced.filter((x) => best && x.real === best.real);
+  const ties = priced.filter((x) => best && rankReal(x) === rankReal(best));
   const liters = Number(state.settings.liters) || 0;
-  const saveSum = best && best.saved != null ? best.saved : null;
+  const saveSum = best ? rankSaved(best) : null;
+  const modeHint = rankMode() === "banks" ? "рейтинг з картами де є" : "рейтинг Армія+";
   $("kpis").innerHTML = [
-    kpi("ОПТИМУМ", best ? money(best.real) : "—", best ? `${ties.map((x) => offerName(x)).join(", ")} · грн/л` : "немає в області"),
-    kpi("ЗАПРАВКА", best && best.fill != null ? money(best.fill) : "—", `${liters} л на найдешевшій`),
+    kpi("ОПТИМУМ", best ? money(rankReal(best)) : "—", best ? `${ties.map((x) => offerName(x)).join(", ")} · грн/л` : "немає в області"),
+    kpi("ЗАПРАВКА", best && rankFill(best) != null ? money(rankFill(best)) : "—", `${liters} л на найдешевшій`),
     kpi("ЕКОНОМІЯ", saveSum != null ? `−${money(saveSum)}` : "—", `${liters} л зі знижкою`),
-    kpi("ПРОПОЗИЦІЙ", String(list.length), "Армія+ і картки банків"),
+    kpi("МЕРЕЖ", String(list.length), modeHint),
   ].join("");
 }
 
@@ -366,14 +376,29 @@ function bankMark(card) {
 function netCell(item, best) {
   const brand = brandLine(item);
   const tag = best ? `<span class="opt-tag">оптимум</span>` : "";
-  if (item.offerKind === "card" && item.card) {
-    return `<div class="net">${logoMark(item, "net-logo")}${bankMark(item.card)}<div>
-      <div>${esc(item.name)}${tag}</div>
-      <small class="net-brand">${esc(item.card.bankName)} · ${esc(item.card.cardName)}</small>
-    </div></div>`;
-  }
-  const sub = item.offerKind === "army" ? `Армія+${brand ? ` · ${brand}` : ""}` : brand;
-  return `<div class="net">${logoMark(item, "net-logo")}<div><div>${esc(item.name)}${tag}</div>${sub ? `<small class="net-brand">${esc(sub)}</small>` : ""}</div></div>`;
+  const army = item.retail != null || item.offerKey
+    ? `Армія+${brand ? ` · ${brand}` : ""}`
+    : brand;
+  const cardLine = showCardDeal(item)
+    ? `<small class="net-brand card-brand">${bankMark(item.card)}${esc(item.card.bankName)} · ${esc(item.card.cardName)}</small>`
+    : "";
+  return `<div class="net">${logoMark(item, "net-logo")}<div>
+    <div>${esc(item.name)}${tag}</div>
+    ${army ? `<small class="net-brand">${esc(army)}</small>` : ""}
+    ${cardLine}
+  </div></div>`;
+}
+
+function moneyOrDash(n, prefix = "") {
+  return n == null ? "—" : `${prefix}${money(n)}`;
+}
+
+function duoCell(item, armyVal, cardVal, cls = "", prefix = "") {
+  if (!showCardDeal(item)) return `<td class="num ${cls}">${moneyOrDash(armyVal, prefix)}</td>`;
+  return `<td class="num ${cls}"><span class="duo">
+    <span><i>Армія+</i>${moneyOrDash(armyVal, prefix)}</span>
+    <span class="on"><i>${esc(item.card.bankName)}</i>${moneyOrDash(cardVal, prefix)}</span>
+  </span></td>`;
 }
 
 function renderGrid(list) {
@@ -405,18 +430,11 @@ function renderGrid(list) {
       .map((p, i) => {
         const best = isCheapest(p, list);
         const open = state.openCard === p.offerKey;
-        const card = p.offerKind === "card" ? p.card : null;
-        const priceLabel = card ? `з ${card.cardName}` : "з Армія+";
-        return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""} ${card ? "bank-offer" : ""}">
-          ${best ? `<p class="m-best-tag">НАЙДЕШЕВША</p>` : ""}
-          <button class="m-logo" type="button" data-open="${esc(p.offerKey)}" aria-expanded="${open}" aria-label="${esc(offerName(p))}, ${open ? "сховати деталі" : "показати деталі"}">
-            ${logoMark(p)}
-            ${card ? bankMark(card) : ""}
-            <i class="m-logo-plus">${open ? "−" : "+"}</i>
-          </button>
-          <div class="m-sum">
-            <div class="m-cell hi">
-              <span>${esc(priceLabel)}</span>
+        const card = showCardDeal(p) ? p.card : null;
+        const armyHi = !card;
+        const cardHi = !!card;
+        const armyBlock = `<div class="m-cell ${armyHi ? "hi" : ""}">
+              <span>Армія+</span>
               <b>${p.real != null ? money(p.real) : "—"}</b>
               <em>грн/л</em>
             </div>
@@ -429,21 +447,46 @@ function renderGrid(list) {
               <span>економія</span>
               <b>${p.saved != null ? "−" + money(p.saved) : "—"}</b>
               <em>грн</em>
+            </div>`;
+        const cardBlock = card
+          ? `<div class="m-cell ${cardHi ? "hi" : ""}">
+              <span>${esc(card.bankName)}</span>
+              <b>${card.real != null ? money(card.real) : "—"}</b>
+              <em>грн/л</em>
             </div>
-          </div>
+            <div class="m-cell">
+              <span>заправка</span>
+              <b>${card.fill != null ? money(card.fill) : "—"}</b>
+              <em>грн</em>
+            </div>
+            <div class="m-cell save">
+              <span>економія</span>
+              <b>${card.saved != null ? "−" + money(card.saved) : "—"}</b>
+              <em>грн</em>
+            </div>`
+          : "";
+        return `<article class="m-card ${best ? "best" : ""} ${open ? "open" : ""} ${card ? "bank-offer" : ""}">
+          ${best ? `<p class="m-best-tag">НАЙДЕШЕВША</p>` : ""}
+          <button class="m-logo" type="button" data-open="${esc(p.offerKey)}" aria-expanded="${open}" aria-label="${esc(offerName(p))}, ${open ? "сховати деталі" : "показати деталі"}">
+            ${logoMark(p)}
+            ${card ? bankMark(card) : ""}
+            <i class="m-logo-plus">${open ? "−" : "+"}</i>
+          </button>
+          <div class="m-sum${card ? " with-card" : ""}">${armyBlock}${cardBlock}</div>
           <div class="m-detail"${open ? "" : " hidden"}>
             <div class="m-head">
               <span class="m-rank">${String(i + 1).padStart(2, "0")}</span>
               <h3>${esc(p.name)}</h3>
-              <p class="net-brand">${esc(p.offerTitle || "Армія+")}${brandLine(p) ? ` · ${esc(brandLine(p))}` : ""}</p>
+              <p class="net-brand">Армія+${brandLine(p) ? ` · ${esc(brandLine(p))}` : ""}</p>
+              ${card ? `<p class="net-brand">${esc(card.bankName)} · ${esc(card.cardName)}</p>` : ""}
             </div>
             <div class="m-prices">
               <div><span>Стеля</span><b>${money(p.retail)}</b></div>
-              <div><span>Знижка</span><b>${p.discount != null ? "−" + money(p.discount) : "—"}</b></div>
-              <div class="hi"><span>${esc(p.offerTitle || "Армія+")}</span><b>${p.real != null ? money(p.real) : "—"}</b></div>
+              <div><span>Армія+</span><b>${p.real != null ? money(p.real) : "—"}</b></div>
+              ${card ? `<div class="hi"><span>${esc(card.bankName)}</span><b>${card.real != null ? money(card.real) : "—"}</b></div>` : `<div class="hi"><span>Армія+</span><b>${p.real != null ? money(p.real) : "—"}</b></div>`}
             </div>
-            <p class="m-fill">${liters} л = <b>${p.fill != null ? money(p.fill) : "—"}</b> грн</p>
-            <p class="m-save">економія ${p.saved != null ? money(p.saved) : "—"} грн</p>
+            <p class="m-fill">${liters} л = <b>${rankFill(p) != null ? money(rankFill(p)) : "—"}</b> грн</p>
+            <p class="m-save">економія ${rankSaved(p) != null ? money(rankSaved(p)) : "—"} грн</p>
             <p class="m-note">${esc([p.limit, ...(p.extras || [])].filter(Boolean).join(" · "))}</p>
           </div>
         </article>`;
@@ -455,14 +498,14 @@ function renderGrid(list) {
   const body = list
     .map((p, i) => {
       const best = isCheapest(p, list);
-      return `<tr class="${best ? "best" : ""} ${p.offerKind === "card" ? "bank-offer" : ""}">
+      return `<tr class="${best ? "best" : ""} ${p.card ? "bank-offer" : ""}">
         <td>${String(i + 1).padStart(2, "0")}</td>
         <td>${netCell(p, best)}</td>
         <td class="num">${money(p.retail)}</td>
-        <td class="num">${p.discount != null ? "−" + money(p.discount) : "—"}</td>
-        <td class="num real">${p.real != null ? money(p.real) : "—"}</td>
-        <td class="num fill">${p.fill != null ? money(p.fill) : "—"}</td>
-        <td class="num">${p.saved != null ? "−" + money(p.saved) : "—"}</td>
+        ${duoCell(p, p.discount, p.card && p.card.discount, "", "−")}
+        ${duoCell(p, p.real, p.card && p.card.real, "real")}
+        ${duoCell(p, p.fill, p.card && p.card.fill, "fill")}
+        ${duoCell(p, p.saved, p.card && p.card.saved, "", "−")}
         <td class="note">${esc([p.limit, ...(p.extras || [])].filter(Boolean).join(" · "))}</td>
       </tr>`;
     })
@@ -575,6 +618,9 @@ function applyControls() {
   const litersNow = clampLiters(Number(state.settings.liters));
   if ($("liters-minus")) $("liters-minus").disabled = litersNow <= 0;
   if ($("liters-plus")) $("liters-plus").disabled = litersNow >= 200;
+  document.querySelectorAll(".rank-mode").forEach((btn) => {
+    btn.classList.toggle("on", btn.dataset.rank === rankMode());
+  });
 }
 
 function showTab(tab) {
@@ -856,6 +902,13 @@ function bind() {
   document.querySelectorAll(".tier").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.settings.tier = btn.dataset.tier;
+      saveSettings();
+      paint();
+    });
+  });
+  document.querySelectorAll(".rank-mode").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.settings.rankMode = btn.dataset.rank === "banks" ? "banks" : "army";
       saveSettings();
       paint();
     });

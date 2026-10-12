@@ -267,7 +267,14 @@ select, input {
 .kpi .t { color: var(--khaki); font-size: 13px; }
 
 .board { padding: 16px 28px 28px; }
-.table-head { margin-bottom: 10px; }
+.table-head {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .table-head h2 {
   margin: 0;
   font-family: "Chakra Petch", sans-serif;
@@ -275,6 +282,65 @@ select, input {
   letter-spacing: .06em;
 }
 .table-head p { margin: 4px 0 0; color: var(--khaki); font-size: 14px; }
+.rank-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  min-width: min(100%, 420px);
+}
+.rank-mode {
+  appearance: none;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--tan);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: .03em;
+  text-align: left;
+}
+.rank-mode.on {
+  border-color: var(--sage);
+  background: rgba(143, 163, 90, .16);
+  color: var(--ink);
+}
+.duo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.duo span {
+  display: block;
+  color: var(--mute);
+}
+.duo span.on { color: inherit; }
+.duo i {
+  display: block;
+  font-style: normal;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+  letter-spacing: .06em;
+  color: var(--mute);
+  font-weight: 400;
+}
+.duo span.on i { color: var(--khaki); }
+.net-brand.card-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.net-brand.card-brand .bank-mark,
+.net-brand.card-brand .pay-mark {
+  width: 22px;
+  height: 16px;
+  flex: 0 0 auto;
+  padding: 1px;
+}
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
 table.sheet {
   width: 100%;
@@ -524,6 +590,7 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
 .m-cell.hi { border-color: rgba(143, 163, 90, .45); }
 .m-cell.hi b { color: var(--sage); }
 .m-cell.save b { color: var(--khaki); }
+.m-sum.with-card { grid-template-rows: auto auto; }
 .m-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .m-rank {
   font-family: "Share Tech Mono", monospace;
@@ -697,6 +764,8 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   .liter-stepper { grid-template-columns: 48px 1fr 48px; }
   .liter-btn { min-height: 48px; font-size: 30px; }
   .kpis { display: none; }
+  .table-head { align-items: stretch; }
+  .rank-switch { min-width: 0; width: 100%; }
   .sync { flex-direction: column; align-items: stretch; }
   .edit-actions { width: 100%; display: grid; grid-template-columns: 1fr; }
   select, input {
