@@ -131,7 +131,9 @@ function cardById(id) {
 }
 
 function bankLogo(id) {
-  return id ? `logos/banks/${id}.svg` : "";
+  const bank = bankById(id);
+  const file = bank && bank.logo ? bank.logo : `${id}.svg`;
+  return id ? `logos/banks/${file}` : "";
 }
 
 function payLogo(id) {

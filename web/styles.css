@@ -620,13 +620,14 @@ table.sheet .note { color: var(--mute); font-size: 12px; max-width: 260px; }
   color: var(--ink);
 }
 .bank-logo, .pay-logo, .mini-logo {
-  width: 28px;
+  width: 48px;
   height: 28px;
-  flex: 0 0 28px;
+  flex: 0 0 48px;
   display: block;
   object-fit: contain;
   border-radius: 6px;
-  background: #0b0d0a;
+  background: #fff;
+  padding: 3px;
 }
 .pay-logo { width: 42px; height: 28px; flex-basis: 42px; }
 .pay-row {

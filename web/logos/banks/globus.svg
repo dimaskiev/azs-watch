@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 40" role="img">
-  <rect width="130" height="40" rx="4" fill="#0b6e4f"/>
-  <circle cx="18" cy="20" r="8" fill="none" stroke="#fff" stroke-width="2"/>
-  <ellipse cx="18" cy="20" rx="3.5" ry="8" fill="none" stroke="#fff" stroke-width="1.4"/>
-  <path d="M10 20h16M11 16h14M11 24h14" stroke="#fff" stroke-width="1.2"/>
-  <text x="80" y="27" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="16" font-weight="700">Глобус</text>
-</svg>
