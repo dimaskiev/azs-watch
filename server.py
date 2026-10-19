@@ -65,6 +65,8 @@ KLO_HOME = "https://klo.ua/"
 PARALLEL_STATIONS = "https://backend.parallel.ua/api/station/get"
 AUTOTRANS_PRICES = "https://autotrans.ua/informaciya-i-ceny"
 AGRARII_AZS = "https://agrarii-razom.com.ua/fuel/azs/{slug}"
+UKRNAFTA_B2B = "https://b2b.ukrnafta.com/"
+GLAVCOM_MONEY = "https://glavcom.ua/economics/personal-money/"
 SHINA_PRICES = "https://shinapro.in.ua/tsiny-na-palne/"
 AUTORIA_PRICES = "https://auto.ria.com/uk/toplivo/upd/"
 UA = (
@@ -114,6 +116,15 @@ AGRARII_SLUGS = {
     "ukrnafta": ("UKRNAFTA",),
     "marshal": ("Marshal",),
     "chipo": ("Chipo",),
+}
+GLAVCOM_ALIASES = {
+    "UKRNAFTA": ("UKRNAFTA",),
+    "Укрнафта": ("UKRNAFTA",),
+    "OKKO": ("ОККО", "OKKO"),
+    "ОККО": ("ОККО", "OKKO"),
+    "WOG": ("WOG",),
+    "UPG": ("UPG",),
+    "KLO": ("KLO",),
 }
 AGRARII_LABELS = {
     "a-95+": "a95plus",
@@ -497,6 +508,78 @@ def parse_parallel_stations(raw: str) -> tuple[dict[str, float], dict[str, dict[
     return national, regional
 
 
+def parse_ukrnafta_official(html: str) -> dict[str, float]:
+    if re.search(r"just a moment|cf-browser-verification|challenge-platform", html, re.I):
+        return {}
+    dated = re.search(r"актуальн\w*\s+на\s+(\d{1,2})\.(\d{1,2})\.(\d{4})", html, re.I)
+    if dated:
+        try:
+            stamp = datetime(int(dated.group(3)), int(dated.group(2)), int(dated.group(1)), tzinfo=timezone.utc)
+        except ValueError:
+            stamp = None
+        if stamp is not None and not stamp_is_fresh(stamp):
+            return {}
+    blob = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
+    fuels: dict[str, float] = {}
+    for pat, key in (
+        (r"а-95\s*energy", "a95plus"),
+        (r"дп\s*energy", "dieselplus"),
+        (r"а-92", "a92"),
+        (r"а-95(?!\s*energy)", "a95"),
+        (r"дп(?!\s*energy)", "diesel"),
+        (r"газ", "lpg"),
+    ):
+        match = re.search(pat + r".{0,40}?(\d{2,3})\s+(\d)\s*грн", blob, re.I)
+        if match:
+            price = parse_number(f"{match.group(1)}.{match.group(2)}")
+        else:
+            match = re.search(pat + r".{0,40}?(\d{2,3}[.,]\d{2})", blob, re.I)
+            price = parse_number(match.group(1)) if match else None
+        if price is not None:
+            fuels[key] = price
+    return fuels
+
+
+def glavcom_latest_azs_url(listing: str) -> str:
+    for href in re.findall(r'href="([^"]+)"', listing):
+        if not re.search(r"tsini-na-azs-\d+", href):
+            continue
+        if href.startswith("/"):
+            return "https://glavcom.ua" + href
+        if href.startswith("http"):
+            return href
+    return ""
+
+
+def parse_glavcom_azs(html: str) -> dict[str, dict[str, float]]:
+    if not stamp_is_fresh(parse_page_stamp(html)):
+        return {}
+    keys = ("a95", "a95plus", "diesel", "dieselplus", "a100", "a92", "lpg")
+    out: dict[str, dict[str, float]] = {}
+    for row in re.finditer(r"<tr[^>]*>(.*?)</tr>", html, re.S | re.I):
+        alt = re.search(r'<img[^>]+alt="([^"]+)"', row.group(1), re.I)
+        if not alt:
+            continue
+        aliases = GLAVCOM_ALIASES.get(alt.group(1).strip())
+        if not aliases:
+            continue
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", row.group(1), re.S | re.I)
+        fuels: dict[str, float] = {}
+        for key, cell in zip(keys, cells[1:]):
+            if key == "a100":
+                continue
+            raw = re.sub(r"<[^>]+>", "", cell)
+            if re.search(r"^[\s\-–—]*$", raw):
+                continue
+            price = parse_number(raw)
+            if price is not None:
+                fuels[key] = price
+        if fuels:
+            for alias in aliases:
+                out[alias] = dict(fuels)
+    return out
+
+
 def parse_autotrans_official(html: str) -> dict[str, float]:
     dated = re.search(r'class="fuel__date">\s*(\d{2})\.(\d{2})\.(\d{4})', html, re.I)
     if not dated:
@@ -700,6 +783,8 @@ def fetch_alt_prices() -> tuple[
         ("klo", KLO_HOME, "klo.ua"),
         ("parallel", PARALLEL_STATIONS, "parallel.ua"),
         ("autotrans", AUTOTRANS_PRICES, "autotrans.ua"),
+        ("ukrnafta", UKRNAFTA_B2B, "b2b.ukrnafta.com"),
+        ("glavcom", GLAVCOM_MONEY, "glavcom.ua"),
         ("shina", SHINA_PRICES, "shinapro.in.ua"),
         ("autoria", AUTORIA_PRICES, "auto.ria.com"),
         *[
@@ -771,6 +856,31 @@ def fetch_alt_prices() -> tuple[
             _put_fuels(merged, ("Автотранс",), fuels, sources, f"{label} · сьогодні", True)
             from_official.add("Автотранс")
             notes.append(f"Автотранс · {label}")
+
+    if "ukrnafta" in pages:
+        label, html = pages["ukrnafta"]
+        fuels = parse_ukrnafta_official(html)
+        if fuels:
+            _put_fuels(merged, ("UKRNAFTA",), fuels, sources, f"{label} · сьогодні", True)
+            from_official.add("UKRNAFTA")
+            notes.append(f"UKRNAFTA · {label}")
+
+    if "glavcom" in pages and "UKRNAFTA" not in from_official:
+        listing = pages["glavcom"][1]
+        article_url = glavcom_latest_azs_url(listing)
+        if article_url:
+            try:
+                article = fetch(article_url, timeout=18)
+                extra = parse_glavcom_azs(article)
+            except Exception as exc:
+                extra = {}
+                notes.append(f"glavcom.ua: {exc}")
+            for alias, fuels in extra.items():
+                if alias in from_official:
+                    continue
+                if _put_fuels(merged, (alias,), fuels, sources, "glavcom.ua · сьогодні", True):
+                    from_official.add(alias)
+                    notes.append(f"{alias} · glavcom.ua")
 
     for slug, aliases in AGRARII_SLUGS.items():
         kind = f"agrarii:{slug}"
