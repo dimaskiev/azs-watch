@@ -956,8 +956,14 @@ def overlay_alt_prices(
             official_regions[name].add(region)
             known_regions = list(regional.keys())
 
+    fresh_national = {name for name, src in alt_sources.items() if "сьогодні" in str(src)}
+
     for region, mapping in regional.items():
         for name, prices in mapping.items():
+            extra = alt.get(name) or {}
+            if name in fresh_national and extra and region not in official_regions.get(name, set()):
+                apply(prices, extra, name)
+                continue
             if name in official_regions and region not in official_regions[name]:
                 extra = alt.get(name, {})
                 nat = national.get(name, {})
